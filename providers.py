@@ -209,6 +209,52 @@ async def kling_tryon(client, human, cloth):
     return imgs[0]["url"]
 
 
+# ---------------------------------------------------------------- 火山方舟（即梦 Seedream）
+ARK = env("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+
+
+def ark_size(first):
+    """输出和人像照片同样的长宽比，约 2K 像素量（4.0/4.5 要求总像素在 1280x720 到 4096x4096 之间）。"""
+    try:
+        from PIL import Image
+        w, h = Image.open(first).size if isinstance(first, Path) else (3, 4)
+    except Exception:
+        w, h = 3, 4
+    k = (2048 * 2048 / (w * h)) ** 0.5
+    return f"{round(w * k / 16) * 16}x{round(h * k / 16) * 16}"
+
+
+async def seedream_edit(client, images, prompts):
+    """Seedream 多图参考生成：图 1 是人，后面是衣服、鞋、配饰，最多 14 张，同步返回。"""
+    if len(images) > 14:
+        raise GenError("即梦一次最多 14 张参考图。")
+    last = None
+    for p in prompts:
+        body = {"model": env("SEEDREAM_MODEL", "doubao-seedream-4-5-251128"), "prompt": p,
+                "image": [data_uri(x) for x in images], "size": ark_size(images[0]),
+                "sequential_image_generation": "disabled", "response_format": "url", "watermark": False}
+        try:
+            r = await client.post(f"{ARK}/images/generations", json=body,
+                                  headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
+                                           "Content-Type": "application/json"})
+            if r.status_code in (401, 403):
+                raise GenError("火山方舟拒绝了 ARK_API_KEY（无效、没开通 Seedream 模型或余额不足）。", r.status_code)
+            j = r.json() if "json" in r.headers.get("content-type", "") else {}
+            if r.status_code >= 400 or "error" in j:
+                e = j.get("error") or {}
+                raise GenError(f"即梦生成失败（{r.status_code}）：{e.get('code', '')} {e.get('message', r.text[:300])}",
+                               r.status_code)
+            url = ((j.get("data") or [{}])[0]).get("url")
+            if not url:
+                raise GenError(f"即梦没有返回图片：{json.dumps(j, ensure_ascii=False)[:300]}")
+            return url
+        except GenError as e:
+            last = e
+            if e.status in (401, 403):
+                break
+    raise last
+
+
 # ---------------------------------------------------------------- fal.ai
 def fal_key():
     return env("FAL_KEY")
@@ -260,16 +306,17 @@ async def fal_tryon(client, human, cloth):
 
 # ---------------------------------------------------------------- 选择与价格
 def ready(provider):
-    return {"bailian": bool(ds_key()), "kling": kling_ready(), "fal": bool(fal_key())}[provider]
+    return {"seedream": bool(env("ARK_API_KEY")), "bailian": bool(ds_key()), "kling": kling_ready(),
+            "fal": bool(fal_key())}[provider]
 
 
-EDIT = {"bailian": bailian_edit, "fal": fal_edit}
-EDIT_MAX_IMAGES = {"bailian": 3, "fal": 8}
-NAMES = {"bailian": "阿里云百炼", "kling": "可灵", "fal": "fal.ai"}
+EDIT = {"seedream": seedream_edit, "bailian": bailian_edit, "fal": fal_edit}
+EDIT_MAX_IMAGES = {"seedream": 14, "bailian": 3, "fal": 8}
+NAMES = {"seedream": "即梦", "bailian": "阿里云百炼", "kling": "可灵", "fal": "fal.ai"}
 
 
 def price(kind, provider):
     """界面估价用，按控制台实际价格在 .env 里改。"""
-    defaults = {("tryon", "bailian"): 0.5, ("refine", "bailian"): 0.5, ("edit", "bailian"): 0.3,
+    defaults = {("edit", "seedream"): 0.25, ("tryon", "bailian"): 0.5, ("refine", "bailian"): 0.5, ("edit", "bailian"): 0.3,
                 ("tryon", "kling"): 0.5, ("edit", "fal"): 1.1, ("tryon", "fal"): 0.5, ("refine", "fal"): 0.5}
     return float(env(f"PRICE_{kind}_{provider}".upper(), str(defaults.get((kind, provider), 0))))

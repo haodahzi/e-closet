@@ -1,7 +1,7 @@
 """效果验证：把 10 身测试搭配在几条换装流程上各跑几次，结果拿到打分页里打分。
 
-    python bench.py --pipelines bailian,kling --runs 1      # 第一轮：每条流程每身跑 1 次，挑出最好的
-    python bench.py --pipelines bailian --runs 3            # 第二轮：胜出的流程每身跑 3 次，看稳定性
+    python bench.py --pipelines seedream --runs 1           # 第一轮：每身跑 1 次（多填几家 key 可以用逗号同时比较）
+    python bench.py --pipelines seedream --runs 3           # 第二轮：每身跑 3 次，看稳定性
     python bench.py --mock                                  # 不花钱，先检查素材和配置
 
 素材放在 bench/images/，搭配写在 bench/outfits.json（格式见 bench/outfits.example.json）。

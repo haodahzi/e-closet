@@ -41,21 +41,21 @@ def load_env():
 load_env()
 import providers as P  # noqa: E402  读完 .env 再导入
 
-PIPELINES = ("bailian", "kling", "fal")
+PIPELINES = ("seedream", "bailian", "kling", "fal")
 
 
 def default_pipeline():
     p = P.env("PIPELINE")
     if p in PIPELINES:
         return p
-    return next((x for x in PIPELINES if P.ready(x)), "bailian")
+    return next((x for x in PIPELINES if P.ready(x)), "seedream")
 
 
 def default_editor():
     e = P.env("EDIT_PROVIDER")
     if e in P.EDIT:
         return e
-    return "bailian" if P.ready("bailian") or not P.ready("fal") else "fal"
+    return next((x for x in ("seedream", "bailian", "fal") if P.ready(x)), "seedream")
 
 
 PIPELINE, EDITOR = default_pipeline(), default_editor()
@@ -126,8 +126,11 @@ def wear_text(wear):
 
 
 def clothes_prompts(pieces, wear):
-    """fal 流程：一次换上全部衣服。图 1 是人，图 2.. 依次是各单品。"""
-    refs = ", ".join(f"the {named(it, PIECE_EN[c])} from image {i + 2}" for i, (c, it) in enumerate(pieces))
+    """一次换上全部单品（即梦 / fal 流程）。图 1 是人，图 2.. 依次是各单品；配饰写成 ("accessory", item)。"""
+    label = lambda c, it: named(it, PIECE_EN[c]) if c != "accessory" else (it.get("name") or "").strip() or "accessory"
+    refs = ", ".join(f"the {label(c, it)} from image {i + 2}" + (" (worn where it naturally belongs, at realistic scale)"
+                                                                  if c == "accessory" else "")
+                     for i, (c, it) in enumerate(pieces))
     wear_txt = wear_text(wear) if any(c == "shirt" for c, _ in pieces) else ""
     fidelity = ("Reproduce every garment faithfully: same colour, fabric texture, pattern and stripe scale, collar "
                 "shape, buttons, stitching and logos. Do not invent details. Fabric should drape, crease and cast "
@@ -222,7 +225,13 @@ def build_plan(req: TryOn, items, pipeline=None, editor=None):
         raise HTTPException(400, "还没选任何单品。至少选一件衬衫、裤子、鞋子或配饰。")
 
     steps = []
-    if pipeline == "fal":
+    if pipeline == "seedream":  # 一个模型一次出图：人 + 衬衫 + 裤子 + 鞋 + 配饰
+        pieces = [(c, it) for c, it in (("shirt", shirt), ("pants", pants), ("shoes", shoes)) if it] + \
+                 [("accessory", it) for it in accs]
+        steps.append({"kind": "edit", "provider": "seedream", "label": "换上这一身",
+                      "refs": [it["file"] for _, it in pieces], "prompts": clothes_prompts(pieces, wear)})
+        accs = []
+    elif pipeline == "fal":
         pieces = [(c, it) for c, it in (("shirt", shirt), ("pants", pants), ("shoes", shoes)) if it]
         if pieces:
             steps.append({"kind": "edit", "provider": "fal", "label": "换上" + "、".join(
@@ -382,7 +391,7 @@ def state():
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "refine_label": "加强衬衫细节" if PIPELINE == "fal" else "精修衣服细节",
-                       "refine_hint": {"fal": "条纹、格纹走样时打开，多调用一次专用试穿模型；可能把塞进去的下摆放出来",
+                       "refine_hint": {"seedream": "", "fal": "条纹、格纹走样时打开，多调用一次专用试穿模型；可能把塞进去的下摆放出来",
                                        "bailian": "条纹、格纹、logo 走样时打开，多调用一次百炼精修模型",
                                        "kling": ""}[PIPELINE]}}
 

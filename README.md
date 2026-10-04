@@ -1,7 +1,7 @@
 # 衬衫衣橱 e·closet
 
 本地运行的电子衣橱：存你的衬衫、裤子、鞋子、配饰，选一身，用你自己的照片生成试穿效果。
-换装走云端模型（阿里云百炼、可灵，或 fal.ai），模型接入都在 `providers.py`。
+换装走云端模型：默认只用**即梦（火山方舟 Seedream）**一个模型一次出图；也可以接阿里云百炼、可灵、fal.ai 做对比。模型接入都在 `providers.py`。
 
 ## 启动
 
@@ -20,18 +20,20 @@ python app.py
 
 | 平台 | 填什么 | 在哪开通 |
 |---|---|---|
+| **即梦（只填这个就能用）** | `ARK_API_KEY` | 火山引擎控制台 → 火山方舟 → API Key 管理创建 key；开通管理里开通 Doubao-Seedream-4.5 |
 | 阿里云百炼 | `DASHSCOPE_API_KEY` | 百炼控制台创建 API Key，开通「AI试衣-Plus」「AI试衣-图片精修」「通义千问图像编辑」 |
 | 可灵 | `KLING_ACCESS_KEY` `KLING_SECRET_KEY` | 可灵开放平台创建密钥，购买「虚拟试穿」资源包 |
 | fal.ai（可选） | `FAL_KEY` | 原方案，留作对照 |
 
 右上角会显示当前用哪家换装、哪家编辑。
 
-## 三条换装流程
+## 换装流程
 
-在 `.env` 里用 `PIPELINE=bailian / kling / fal` 切换，默认用第一个填了 key 的。
+在 `.env` 里用 `PIPELINE=seedream / bailian / kling / fal` 切换，默认用第一个填了 key 的。
 
 | 流程 | 衬衫和裤子 | 鞋、穿法、配饰 |
 |---|---|---|
+| `seedream` | 即梦一次调用：照片 + 衬衫 + 裤子 + 鞋 + 配饰（最多 14 张参考图），穿法写在指令里 | 同一次调用 |
 | `bailian` | 百炼 aitryon-plus 一次换上下装（可选再精修一轮） | 通义千问图像编辑：换鞋、按选择调塞进/放外面、袖子、领口；配饰每次最多 2 件 |
 | `kling` | 可灵试穿分两次换；塞进 = 先衬衫后裤子，放外面 = 先裤子后衬衫 | 同上（需要百炼 key） |
 | `fal` | Nano Banana Pro 一次换全身（原方案） | 同一个模型 |
@@ -41,9 +43,9 @@ python app.py
 1. 素材放进 `bench/images/`：2 张全身底片、5 件衬衫（纯色、细条纹、格纹、有纹理的面料、印花）、2 条裤子、2 双鞋、2 件配饰。
 2. 复制 `bench/outfits.example.json` 为 `bench/outfits.json`，把文件名改成你的。
 3. 先 `python bench.py --mock` 不花钱检查素材和配置。
-4. 第一轮，每条流程每身跑 1 次：`python bench.py --pipelines bailian,kling`
+4. 第一轮，每身跑 1 次：`python bench.py --pipelines seedream`（填了别家 key 可以写 `seedream,bailian` 同时比较）
 5. 运行 `python app.py`，打开 http://127.0.0.1:8000/bench ，每张图按「像本人、衬衫还原、整身完整、画面自然、穿法正确」点选。
-6. 第二轮，只对胜出的流程每身跑 3 次看稳定性：`python bench.py --pipelines bailian --runs 3`。加 `--refine` 可以对比精修。
+6. 第二轮，每身跑 3 次看稳定性：`python bench.py --pipelines seedream --runs 3`。
 
 中断后重跑会跳过已经出过的图。
 
