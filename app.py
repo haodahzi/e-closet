@@ -11,7 +11,7 @@ import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 from pydantic import BaseModel
 
 try:  # iPhone 的 HEIC 照片
@@ -100,6 +100,53 @@ def normalize_image(raw: bytes) -> Image.Image:
         s = 1600 / max(w, h)
         im = im.resize((round(w * s), round(h * s)), Image.LANCZOS)
     return im
+
+
+GARMENTS = {"shirt", "pants", "shoes", "accessory"}
+
+
+def cutout(im: Image.Image, holes=False):
+    """去掉和边缘连通的白底，得到透明背景的单品图，只用于界面展示（给模型的仍是原图）。
+    holes=True 时把被包住的白底也去掉（项链、手链中间的空白）。去不干净（比如白衬衫放白底上）返回 None。"""
+    rgb = im.convert("RGB")
+    small = rgb.copy()
+    small.thumbnail((360, 360))
+    r, g, b = small.split()
+    near = ImageChops.darker(r, ImageChops.darker(g, b)).point(lambda v: 255 if v >= 232 else 0)
+    w, h = near.size
+    for xy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]:
+        if near.getpixel(xy) == 255:
+            ImageDraw.floodfill(near, xy, 128)
+    bg = near.point(lambda v: 255 if v in (128, 255) else 0) if holes else near.point(lambda v: 255 if v == 128 else 0)
+    keep = 1 - bg.histogram()[255] / (w * h)
+    if keep < 0.012 or keep > 0.97:  # 几乎全被去掉，或者根本不是白底
+        return None
+    alpha = ImageChops.invert(bg).resize(rgb.size, Image.BILINEAR).filter(ImageFilter.GaussianBlur(1.5))
+    out = rgb.copy()
+    out.putalpha(alpha)
+    box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if box:
+        m = 12
+        out = out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height)))
+    return out
+
+
+def ensure_cut(it):
+    """给单品补一张透明底展示图，返回是否新生成。"""
+    if it["category"] not in GARMENTS or (it.get("cut") and (ITEMS / it["cut"]).exists()) or \
+            ("cut" in it and it["cut"] is None):
+        return False
+    src = ITEMS / it["file"]
+    if not src.exists():
+        return False
+    if "cut" in it and it["cut"] is None:  # 试过，去不了底
+        return False
+    out = cutout(Image.open(src), holes=it["category"] == "accessory")
+    it["cut"] = None
+    if out is not None:
+        it["cut"] = it["id"] + "_cut.png"
+        out.save(ITEMS / it["cut"])
+    return True
 
 
 # ---------------------------------------------------------------- 提示词
@@ -386,7 +433,8 @@ async def run_job(job, req: TryOn, plan):
         with _lock:
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
-                (RESULTS / db["looks"][old]["file"]).unlink(missing_ok=True)
+                for f in {db["looks"][old]["file"], *db["looks"][old].get("turn", [])}:
+                    (RESULTS / f).unlink(missing_ok=True)
                 del db["looks"][old]
             db["looks"][look_id] = look
             db_save(db)
@@ -409,12 +457,16 @@ def index():
 
 @app.get("/api/state")
 def state():
-    db = db_load()
+    with _lock:
+        db = db_load()
+        if [it for it in db["items"].values() if ensure_cut(it)]:  # 旧单品补上透明底展示图
+            db_save(db)
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
-                       "portrait_cost": 0 if MOCK else P.price("edit", EDITOR)}}
+                       "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
+                       "turn_cost": 0 if MOCK else round(P.price("edit", "seedream") * TURN_VIEWS, 2)}}
 
 
 @app.post("/api/items")
@@ -429,6 +481,7 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     im.save(ITEMS / f"{item_id}.jpg", quality=92)
     item = {"id": item_id, "category": category, "name": name.strip()[:40], "file": f"{item_id}.jpg",
             "created": time.time()}
+    ensure_cut(item)
     with _lock:
         db = db_load()
         db["items"][item_id] = item
@@ -457,9 +510,82 @@ def delete_item(item_id: str):
         db = db_load()
         it = db["items"].pop(item_id, None)
         if it:
-            (ITEMS / it["file"]).unlink(missing_ok=True)
+            for f in (it["file"], it.get("cut")):
+                if f:
+                    (ITEMS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
+
+
+TURN_VIEWS = 5  # 正面之外再生成 5 个角度，连同正面一共 6 帧
+
+
+def turn_prompt():
+    she = "she" if P.env("GENDER", "woman") == "woman" else "he"
+    her = "her" if she == "she" else "his"
+    return (f"Image 1 shows a person wearing an outfit. Generate {TURN_VIEWS} separate photos of exactly the same "
+            f"person in exactly the same outfit, as if {she} slowly turns around on a turntable: same face, hair, "
+            "body shape, same shirt with identical colour and pattern scale, worn the same way, same trousers, shoes "
+            "and accessories, same plain studio background and lighting, same relaxed standing pose. The camera stays "
+            "at the same height and distance; full body from head to feet in every photo. In order: "
+            f"1) three-quarter view turned to {her} right, 2) {her} right side profile, 3) back view, "
+            f"4) {her} left side profile, 5) three-quarter view turned to {her} left. Photorealistic.")
+
+
+async def run_turn(job, look_id):
+    try:
+        lk = db_load()["looks"][look_id]
+        src = RESULTS / lk["file"]
+        frames = []
+        if MOCK:
+            base = Image.open(src).convert("RGB")
+            for i in range(TURN_VIEWS):
+                job.update(step=f"生成角度 {i + 1}/{TURN_VIEWS}")
+                await asyncio.sleep(0.3)
+                im = ImageOps.mirror(base) if i % 2 == 0 else base.copy()
+                ImageDraw.Draw(im).text((20, 20), f"DEMO VIEW {i + 1}", fill="white")
+                frames.append(im)
+        else:
+            if not P.ready("seedream"):
+                raise P.GenError("转一圈要用即梦，.env 里还没填 ARK_API_KEY。")
+            job.update(step="生成多个角度")
+            refs = [src]
+            shirt = db_load()["items"].get((lk.get("sel") or {}).get("shirt_id") or "")
+            if shirt:
+                refs.append(ITEMS / shirt["file"])
+            async with httpx.AsyncClient(timeout=600) as client:
+                urls = await P.seedream_views(client, refs, turn_prompt(), TURN_VIEWS)
+                frames = [await fetch_image(client, u) for u in urls]
+        names = []
+        for i, im in enumerate(frames):
+            names.append(f"{look_id}_v{i + 1}.jpg")
+            im.save(RESULTS / names[-1], quality=92)
+        with _lock:
+            db = db_load()
+            if look_id in db["looks"]:
+                db["looks"][look_id]["turn"] = [lk["file"]] + names
+                db_save(db)
+                job.update(status="done", look=db["looks"][look_id])
+            else:
+                job.update(status="error", error="这套搭配已经被删除。")
+    except P.GenError as e:
+        job.update(status="error", error=str(e))
+    except Exception as e:
+        job.update(status="error", error=f"生成中断：{type(e).__name__}: {e}")
+
+
+@app.post("/api/looks/{look_id}/turn")
+async def make_turn(look_id: str):
+    """给一套已生成的搭配补上多个角度，界面上就能自然转动。"""
+    lk = db_load()["looks"].get(look_id)
+    if not lk:
+        raise HTTPException(404, "这套搭配已经被删除。")
+    if lk.get("turn"):
+        return {"cached": True, "look": lk}
+    job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0, "steps": ["生成多个角度"]}
+    JOBS[job["id"]] = job
+    asyncio.create_task(run_turn(job, look_id))
+    return {"cached": False, "job": job}
 
 
 @app.delete("/api/looks/{look_id}")
@@ -468,7 +594,8 @@ def delete_look(look_id: str):
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            (RESULTS / lk["file"]).unlink(missing_ok=True)
+            for f in {lk["file"], *lk.get("turn", [])}:
+                (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
 

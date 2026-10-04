@@ -255,6 +255,26 @@ async def seedream_edit(client, images, prompts):
     raise last
 
 
+async def seedream_views(client, images, prompt, n):
+    """Seedream 组图：一次生成 n 张同一人同一身的不同角度，用来做“转一圈”。"""
+    body = {"model": env("SEEDREAM_MODEL", "doubao-seedream-4-5-251128"), "prompt": prompt,
+            "image": [data_uri(x) for x in images], "size": ark_size(images[0]),
+            "sequential_image_generation": "auto", "sequential_image_generation_options": {"max_images": n},
+            "response_format": "url", "watermark": False}
+    r = await client.post(f"{ARK}/images/generations", json=body, timeout=600,
+                          headers={"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"})
+    if r.status_code in (401, 403):
+        raise GenError("火山方舟拒绝了 ARK_API_KEY（无效、没开通 Seedream 模型或余额不足）。", r.status_code)
+    j = r.json() if "json" in r.headers.get("content-type", "") else {}
+    if r.status_code >= 400 or "error" in j:
+        e = j.get("error") or {}
+        raise GenError(f"生成多角度失败（{r.status_code}）：{e.get('code', '')} {e.get('message', r.text[:300])}")
+    urls = [d["url"] for d in j.get("data") or [] if d.get("url")]
+    if not urls:
+        raise GenError(f"即梦没有返回多角度图片：{json.dumps(j, ensure_ascii=False)[:300]}")
+    return urls
+
+
 CHECKS = ("same_person", "shirt_match", "outfit_complete", "natural", "wear_correct")
 
 

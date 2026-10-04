@@ -3,188 +3,235 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>衬衫衣橱</title>
+<title>e·closet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#F2F1EE; --card:#FFFFFF; --tile:#F5F4F1; --tile-hi:#ECEAE6;
-  --ink:#1B1B1A; --soft:#86847F; --faint:#B9B6B0; --line:#E7E5E1;
+  --bg:#F2F1EE; --card:#FFFFFF; --tile:#F5F4F1; --tile-hi:#E9E7E2;
+  --ink:#1B1B1A; --soft:#86847F; --faint:#B9B6B0; --line:#E2DFD9;
   --accent:#C9895B; --danger:#B4473A;
   --r-lg:20px; --r:14px; --r-sm:10px;
   --serif:"Fraunces","Songti SC",serif;
   --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --ease:cubic-bezier(.2,.7,.2,1);
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:400 14px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--ink);font:400 14px/1.6 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-h2{font-size:16px;font-weight:500;margin:0}
 .muted{color:var(--soft);font-size:12.5px}
+[hidden]{display:none!important}
 
-.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 32px 18px;flex-wrap:wrap}
-.brand{display:flex;align-items:baseline;gap:12px}
-.brand b{font:600 26px/1 var(--serif);letter-spacing:-.01em}
-.brand b i{font-style:normal;color:var(--accent)}
-.brand span{color:var(--soft);font-size:13px}
-.status{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;padding:8px 14px;border-radius:999px;background:var(--card);color:var(--soft)}
-.status::before{content:"";width:7px;height:7px;border-radius:50%;background:#6BA36F}
-.status.demo::before{background:var(--accent)}
+/* 顶栏 */
+.top{display:flex;align-items:center;gap:20px;padding:18px 32px 0}
+.brand{font:600 24px/1 var(--serif);letter-spacing:-.01em;margin-right:auto}
+.brand i{font-style:normal;color:var(--accent)}
+.link{border:0;background:none;padding:6px 2px;font-size:13px;color:var(--soft)}
+.link:hover{color:var(--ink)}
+.demo{font-size:12px;color:var(--soft);display:inline-flex;align-items:center;gap:7px}
+.demo::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
 
-.room{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr) minmax(280px,330px);gap:20px;padding:0 32px;align-items:start}
-.panel{background:var(--card);border-radius:var(--r-lg);padding:20px}
-.head{display:flex;justify-content:space-between;align-items:baseline}
+/* 衣杆 */
+.rack{position:relative;padding:22px 0 0}
+.rod{position:absolute;left:24px;right:24px;top:30px;height:3px;border-radius:3px;background:linear-gradient(#8f8b84,#5d5a55);box-shadow:0 2px 3px rgba(0,0,0,.12)}
+.rail{position:relative;display:flex;gap:6px;padding:0 48px 6px;overflow-x:auto;scrollbar-width:none;min-height:186px}
+.rail::-webkit-scrollbar{display:none}
+.hang{position:relative;flex:0 0 132px;display:flex;flex-direction:column;align-items:center;transform-origin:50% 8px;
+  animation:sway var(--t,6s) ease-in-out var(--d,0s) infinite alternate;transition:translate .45s var(--ease),opacity .3s}
+@keyframes sway{from{rotate:-.9deg}to{rotate:.9deg}}
+.hang:hover ~ .hang{translate:16px 0}
+.hang:has(~ .hang:hover){translate:-16px 0}
+.hanger{width:82px;height:34px;display:block;color:#6f6b65}
+.hang .pick{border:0;background:none;padding:0;margin-top:-4px;width:124px;height:128px;display:block}
+.hang .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;border-radius:6px;filter:drop-shadow(0 8px 10px rgba(60,50,40,.10));transition:opacity .25s}
+.hang.away .pick img{opacity:.15}
+.pick img.card{background:#fff;box-shadow:0 6px 14px rgba(60,50,40,.08);padding:6px}
+.hang .tag{font-size:11.5px;color:var(--soft);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .2s}
+.hang:hover .tag,.hang.on .tag{opacity:1}
+.hang.on .tag{color:var(--ink);font-weight:500}
+.hang.on .hanger{color:var(--ink)}
+.hang.on::before{content:"";position:absolute;top:36px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--accent)}
+.x{position:absolute;top:30px;right:8px;width:20px;height:20px;border-radius:50%;border:0;background:rgba(255,255,255,.9);font-size:13px;line-height:20px;padding:0;opacity:0;color:var(--soft)}
+.hang:hover .x,.thing:hover .x,.look:hover .x,.x:focus-visible{opacity:1}
+.x:hover{color:var(--danger)}
+.add{flex:0 0 120px;display:flex;flex-direction:column;align-items:center;gap:6px;border:0;background:none;color:var(--soft);font-size:12.5px;padding:0}
+.add .hanger{color:var(--faint)}
+.add span{display:flex;align-items:center;justify-content:center;width:96px;height:112px;margin-top:-6px;border:1.5px dashed var(--faint);border-radius:var(--r);font-size:26px;font-weight:300}
+.add:hover{color:var(--ink)}.add:hover span{border-color:var(--ink)}
 
-/* 衣橱 */
-.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:14px 0 16px;background:var(--tile);border-radius:var(--r-sm);padding:3px}
-.tab{border:0;background:none;border-radius:8px;padding:6px 2px;font-size:12.5px;color:var(--soft);white-space:nowrap}
-.tab:hover{color:var(--ink)}
-.tab[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.tab small{font-size:11px;margin-left:3px;opacity:.7}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.item{position:relative}
-.item .pick{display:block;width:100%;padding:0;border:0;border-radius:var(--r);background:var(--tile);overflow:hidden;aspect-ratio:4/5;transition:background .15s}
-.item .pick:hover{background:var(--tile-hi)}
-.item .pick img{width:100%;height:100%;object-fit:contain;display:block;mix-blend-mode:multiply;padding:8%}
-.item.person .pick img{object-fit:cover;padding:0;mix-blend-mode:normal}
-.item.on .pick{box-shadow:inset 0 0 0 1.5px var(--ink)}
-.item.on::after{content:"";position:absolute;top:7px;left:7px;width:18px;height:18px;border-radius:50%;background:var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat}
-.item .del{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(255,255,255,.9);color:var(--ink);font-size:14px;line-height:22px;padding:0;opacity:0}
-.item:hover .del,.item .del:focus-visible{opacity:1}
-.item input{width:100%;border:0;background:none;font-size:12px;padding:5px 2px 0;color:var(--soft);text-overflow:ellipsis}
-.item input:hover,.item input:focus{color:var(--ink);outline:0}
-.item .mk{width:100%;margin-top:4px;border:0;border-radius:8px;background:var(--tile);color:var(--ink);font-size:11.5px;padding:5px 2px}
-.item .mk:hover:not(:disabled){background:var(--ink);color:#fff}
-.item .mk:disabled{color:var(--faint);cursor:wait}
-.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;aspect-ratio:4/5;border:1.5px dashed var(--faint);border-radius:var(--r);color:var(--soft);background:none;font-size:12.5px;text-align:center;padding:8px}
-.add:hover{border-color:var(--ink);color:var(--ink)}
-.add b{font-size:22px;font-weight:400;line-height:1}
-.tip{margin:16px 0 0;font-size:12.5px;color:var(--soft);line-height:1.7}
+/* 中间：镜子 */
+.floor{display:grid;grid-template-columns:96px minmax(0,1fr) 300px;gap:24px;padding:4px 32px 0;align-items:start}
+.stage{position:relative;height:clamp(400px,calc(100vh - 430px),780px);transition:background-color .6s;border-radius:var(--r-lg);overflow:hidden;
+  background:radial-gradient(60% 55% at 50% 42%,#FBFAF8 0%,#EEECE8 70%,#E6E3DE 100%);perspective:1400px;touch-action:pan-y;user-select:none}
+.stage::after{content:"";position:absolute;left:30%;right:30%;bottom:5%;height:5%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,30,20,.18),transparent);pointer-events:none}
+.model{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .8s var(--ease),filter .35s,opacity .35s}
+.breathe{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
+.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
+.frame.show{opacity:1}
+.stage.focus .model{filter:blur(3px) saturate(.7);opacity:.45}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:var(--soft);padding:32px}
+.empty b{font:400 30px/1.2 var(--serif);font-style:italic;color:var(--ink)}
+.empty button{border:0;border-radius:999px;background:var(--ink);color:#fff;padding:10px 20px;font-size:13px}
+.caption{position:absolute;left:0;right:0;bottom:22px;text-align:center;font:400 20px/1.3 var(--serif);font-style:italic;opacity:0;transform:translateY(6px);transition:.3s var(--ease);pointer-events:none}
+.caption small{display:block;font:400 12px var(--sans);font-style:normal;color:var(--soft);margin-top:4px}
+.stage.focus .caption{opacity:1;transform:none}
+.badge{position:absolute;left:16px;top:16px;background:rgba(27,27,26,.72);color:#fff;backdrop-filter:blur(6px);border-radius:999px;padding:4px 12px;font-size:12px}
+.acts{position:absolute;right:14px;top:14px;display:flex;gap:6px}
+.acts button{border:0;border-radius:999px;background:rgba(255,255,255,.88);backdrop-filter:blur(6px);padding:6px 13px;font-size:12.5px}
+.acts button:hover{background:var(--ink);color:#fff}
+.busy{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-radius:999px;padding:10px 20px;font-size:13px;display:flex;align-items:center;gap:10px;white-space:nowrap}
+.busy i{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--ink);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.turnhint{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:11.5px;color:var(--soft);pointer-events:none}
 
-/* 镜子 */
-.stage{display:flex;flex-direction:column;align-items:center}
-.mirror{position:relative;width:100%;max-width:560px;aspect-ratio:3/4;max-height:calc(100vh - 160px);min-height:420px;border-radius:var(--r-lg);overflow:hidden;background:var(--tile-hi)}
-.mirror img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.mirror img.fresh{animation:reveal .6s ease-out}
-@keyframes reveal{from{opacity:0;transform:scale(1.01)}to{opacity:1;transform:none}}
-.mirror .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:32px;text-align:center}
-.mirror .empty p{margin:0;max-width:260px;color:var(--soft);font-size:15px;line-height:1.8}
-.mirror .tag{position:absolute;left:14px;top:14px;background:rgba(27,27,26,.72);color:#fff;backdrop-filter:blur(6px);border-radius:999px;padding:4px 12px;font-size:12px}
-.mirror .busy{position:absolute;left:14px;right:14px;bottom:14px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-radius:var(--r);padding:16px 18px}
-.busy ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.busy li{font-size:13px;color:var(--faint)}
-.busy li::after{content:"";display:block;height:2px;border-radius:2px;margin-top:6px;background:var(--line)}
-.busy li.ok{color:var(--soft)}
-.busy li.ok::after{background:var(--ink)}
-.busy li.now{color:var(--ink);font-weight:500}
-.busy li.now::after{background:linear-gradient(90deg,var(--ink) 0 30%,var(--line) 30%);background-size:200% 100%;animation:run 1.4s linear infinite}
-@keyframes run{from{background-position:100% 0}to{background-position:-100% 0}}
-.under{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:14px;flex-wrap:wrap;min-height:38px}
-.msg{margin:10px 0 0;padding:10px 14px;border-radius:var(--r-sm);font-size:13px;color:var(--danger);background:#FBEDEA;max-width:560px}
-.msg:empty{display:none}
+/* 左：穿过的 */
+.looks h3,.fit h3{margin:0 0 12px;font:400 15px/1.2 var(--serif);font-style:italic}
+.looklist{display:flex;flex-direction:column;gap:10px;max-height:clamp(360px,calc(100vh - 470px),740px);overflow-y:auto;scrollbar-width:none}
+.look{position:relative}
+.look button.v{display:block;width:100%;padding:0;border:0;border-radius:var(--r-sm);overflow:hidden;aspect-ratio:3/4;background:var(--tile-hi)}
+.look img{width:100%;height:100%;object-fit:cover;display:block}
+.look.on button.v{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--ink)}
+.look .x{top:4px;right:4px}
 
-/* 今天这一身 */
-.slot{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:8px 0}
-.slot .th{width:48px;height:56px;border-radius:var(--r-sm);background:var(--tile);object-fit:contain;display:block;mix-blend-mode:multiply;padding:3px}
-.slot .th.none{border:1.5px dashed var(--line);background:none}
-.slot strong{display:block;font-weight:500;font-size:13.5px}
-.slot .muted{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.slot .x{border:0;background:none;color:var(--soft);font-size:12px;padding:4px}
-.slot .x:hover{color:var(--ink)}
-.wear{margin:16px 0 0;padding-top:16px;border-top:1px solid var(--line)}
-.wear[hidden]{display:none}
-.seg{display:grid;grid-template-columns:44px 1fr;align-items:center;gap:8px;margin:8px 0;font-size:13px;color:var(--soft)}
-.seg div{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:3px;gap:3px}
-.seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font-size:13px;color:var(--soft)}
+/* 右：今天这一身 */
+.fit{background:var(--card);border-radius:var(--r-lg);padding:20px}
+.pieces{display:flex;flex-direction:column;gap:6px}
+.piece{display:flex;align-items:center;gap:10px;border:0;background:none;padding:4px;border-radius:var(--r-sm);text-align:left;width:100%}
+.piece img{width:40px;height:46px;object-fit:contain;background:var(--tile);border-radius:8px;padding:2px;flex:0 0 auto}
+.piece .ph{width:40px;height:46px;border:1.5px dashed var(--line);border-radius:8px;flex:0 0 auto}
+.piece span{flex:1;min-width:0;font-size:13px}
+.piece span small{display:block;color:var(--soft);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.piece em{font-style:normal;color:var(--faint);font-size:12px;opacity:0}
+.piece.has:hover{background:var(--tile)}.piece.has:hover em{opacity:1}
+.wear{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.seg{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:3px;gap:3px;margin:6px 0}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 2px;font-size:12.5px;color:var(--soft)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.status[hidden]{display:none}
-.go{width:100%;margin-top:18px;border:0;border-radius:var(--r);background:var(--ink);color:#fff;padding:14px;font-size:15px;font-weight:500;letter-spacing:.04em}
+.go{width:100%;margin-top:16px;border:0;border-radius:var(--r);background:var(--ink);color:#fff;padding:13px;font-size:14.5px;font-weight:500;letter-spacing:.06em}
 .go:hover:not(:disabled){background:#000}
 .go:disabled{background:var(--faint);cursor:not-allowed}
-.ghost{border:0;border-radius:var(--r-sm);background:var(--card);padding:8px 16px;font-size:13px}
-.ghost:hover{background:var(--ink);color:#fff}
-.cost{margin:10px 0 0;text-align:center}
+.cost{margin:8px 0 0;text-align:center;font-size:12px;color:var(--soft);min-height:18px}
+.msg{margin:10px 0 0;padding:9px 12px;border-radius:var(--r-sm);font-size:12.5px;color:var(--danger);background:#FBEDEA}
+.msg:empty{display:none}
 
-/* 穿过的搭配 */
-.looks{margin:20px 32px 40px}
-.strip{display:flex;gap:12px;overflow-x:auto;padding:14px 0 4px}
-.look{position:relative;flex:0 0 120px}
-.look button.view{display:block;width:100%;padding:0;border:0;border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;background:var(--tile-hi)}
-.look img{width:100%;height:100%;object-fit:cover;display:block}
-.look.on button.view{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px var(--ink)}
-.look .del{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(255,255,255,.9);font-size:14px;line-height:22px;padding:0;opacity:0}
-.look:hover .del,.look .del:focus-visible{opacity:1}
-.look time{display:block;font-size:11.5px;color:var(--soft);margin-top:6px}
+/* 鞋架 */
+.shelfwrap{position:relative;margin:14px 32px 24px}
+.shelf{display:flex;gap:14px;align-items:flex-end;overflow-x:auto;scrollbar-width:none;padding:0 16px 8px;min-height:104px}
+.shelf::-webkit-scrollbar{display:none}
+.ledge{height:6px;border-radius:3px;background:linear-gradient(#e2ddd5,#d3cdc3);box-shadow:0 3px 6px rgba(0,0,0,.06)}
+.thing{position:relative;flex:0 0 104px;display:flex;flex-direction:column;align-items:center;transition:translate .35s var(--ease)}
+.thing:hover{translate:0 -6px}
+.thing .pick{border:0;background:none;padding:0;width:96px;height:72px}
+.thing .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:drop-shadow(0 6px 6px rgba(60,50,40,.12));transition:opacity .25s}
+.thing.away .pick img{opacity:.15}
+.thing .tag{font-size:11px;color:var(--soft);max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thing.on .tag{color:var(--ink);font-weight:500}
+.thing.on::after{content:"";position:absolute;bottom:-9px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--accent)}
+.thing .x{top:-4px;right:0}
+.shelf .add{flex:0 0 96px}.shelf .add span{width:72px;height:72px;margin:0}
 
-@media (max-width:1080px){
-  .room{grid-template-columns:1fr;padding:0 16px}
-  .stage{order:-1}
-  .mirror{max-height:none;min-height:0}
-  .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .top{padding:16px}
-  .looks{margin:20px 16px 32px}
-  .item .del,.look .del{opacity:1}
+/* 飞到中间的那件 */
+.ghost{position:fixed;z-index:20;pointer-events:none;object-fit:contain;filter:drop-shadow(0 24px 30px rgba(50,40,30,.22))}
+
+/* 弹层 */
+.veil{position:fixed;inset:0;z-index:30;background:rgba(242,241,238,.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet{background:var(--card);border-radius:var(--r-lg);padding:24px;width:min(420px,100%);box-shadow:0 30px 60px rgba(0,0,0,.08)}
+.sheet h3{margin:0 0 14px;font:400 20px/1.2 var(--serif);font-style:italic}
+.previews{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
+.previews img{width:72px;height:84px;object-fit:contain;background:var(--tile);border-radius:var(--r-sm);mix-blend-mode:multiply}
+.cats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.cats button{border:0;border-radius:999px;background:var(--tile);padding:6px 14px;font-size:13px;color:var(--soft)}
+.cats button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.field{width:100%;border:0;border-bottom:1px solid var(--line);padding:9px 2px;font-size:14px;background:none;outline:0}
+.field:focus{border-bottom-color:var(--ink)}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.btn{border:0;border-radius:999px;padding:9px 20px;font-size:13px;background:var(--tile)}
+.btn.dark{background:var(--ink);color:#fff}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:30;width:min(420px,100%);background:var(--card);padding:24px;overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.08);animation:slide .35s var(--ease)}
+@keyframes slide{from{transform:translateX(100%)}}
+.drawer h3{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px;font:400 22px/1.2 var(--serif);font-style:italic}
+.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+.photo{position:relative}
+.photo .pick{display:block;width:100%;aspect-ratio:3/4;border:0;padding:0;border-radius:var(--r);overflow:hidden;background:var(--tile)}
+.photo .pick img{width:100%;height:100%;object-fit:cover;display:block}
+.photo.on .pick{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px var(--ink)}
+.photo .tag{font-size:12px;color:var(--soft);margin-top:4px}
+.photo .mk{width:100%;margin-top:6px;border:0;border-radius:999px;background:var(--tile);font-size:12px;padding:6px}
+.photo .mk:hover:not(:disabled){background:var(--ink);color:#fff}
+.photo .x{opacity:1;top:6px;right:6px}
+.addp{display:flex;align-items:center;justify-content:center;aspect-ratio:3/4;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:13px;width:100%}
+
+@media (max-width:980px){
+  .top{padding:14px 16px 0}
+  .floor{grid-template-columns:1fr;padding:4px 16px 0}
+  .stage{order:-1;height:62vh}
+  .looks{order:2}.looklist{flex-direction:row;overflow-x:auto;max-height:none}.look{flex:0 0 72px}
+  .rail{padding:0 20px 10px}.rod{left:8px;right:8px}
+  .shelfwrap{margin:18px 16px 28px}
+  .x{opacity:1}
 }
-@media (max-width:520px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <header class="top">
-  <div class="brand"><b>e<i>·</i>closet</b><span>衬衫衣橱</span></div>
-  <span class="status" id="status"></span>
+  <div class="brand">e<i>·</i>closet</div>
+  <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
+  <button class="link" id="open-photos">我的照片</button>
 </header>
 
-<main class="room">
-  <section class="panel" aria-labelledby="h-closet">
-    <div class="head"><h2 id="h-closet">衣橱</h2><span class="muted" id="count"></span></div>
-    <div class="tabs" role="tablist" id="tabs"></div>
-    <div class="grid" id="grid"></div>
-    <p class="tip" id="tip"></p>
-    <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
-  </section>
-
-  <section class="stage" aria-label="镜子">
-    <div class="mirror" id="mirror"></div>
-    <div class="under" id="under"></div>
-    <p class="msg" id="msg" role="alert"></p>
-  </section>
-
-  <section class="panel" aria-labelledby="h-outfit">
-    <h2 id="h-outfit">今天这一身</h2>
-    <div id="slots"></div>
-    <div class="wear" id="wear">
-      <div class="seg"><span>下摆</span><div data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div></div>
-      <div class="seg"><span>袖子</span><div data-k="sleeves"><button data-v="down">放下</button><button data-v="rolled">卷到手肘</button></div></div>
-      <div class="seg"><span>领口</span><div data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div></div>
-      </div>
-    <button class="go" id="go">生成试穿</button>
-    <p class="muted cost" id="cost"></p>
-  </section>
-</main>
-
-<section class="looks panel" aria-labelledby="h-looks">
-  <h2 id="h-looks">穿过的搭配</h2>
-  <div class="strip" id="strip"></div>
+<section class="rack" aria-label="衣杆">
+  <div class="rod"></div>
+  <div class="rail" id="rail"></div>
 </section>
 
+<main class="floor">
+  <aside class="looks" aria-label="穿过的搭配">
+    <h3>Looks</h3>
+    <div class="looklist" id="looks"></div>
+  </aside>
+  <section class="stage" id="stage" aria-label="试穿">
+    <div class="model" id="model"><div class="breathe" id="frames"></div></div>
+    <div class="caption" id="caption"></div>
+  </section>
+  <aside class="fit" aria-label="今天这一身">
+    <h3>今天这一身</h3>
+    <div class="pieces" id="pieces"></div>
+    <div class="wear" id="wear">
+      <div class="seg" data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div>
+      <div class="seg" data-k="sleeves"><button data-v="down">袖子放下</button><button data-v="rolled">卷到手肘</button></div>
+      <div class="seg" data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div>
+    </div>
+    <button class="go" id="go">生成试穿</button>
+    <p class="cost" id="cost"></p>
+    <p class="msg" id="msg" role="alert"></p>
+  </aside>
+</main>
+
+<section class="shelfwrap" aria-label="鞋和配饰">
+  <div class="shelf" id="shelf"></div>
+  <div class="ledge"></div>
+</section>
+
+<input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+<div id="layer"></div>
+
 <script>
-const CATS=[{id:'person',label:'照片'},{id:'shirt',label:'衬衫'},{id:'pants',label:'裤子'},{id:'shoes',label:'鞋子'},{id:'accessory',label:'配饰'}];
-const TIPS={
-  person:'正面站立、全身入镜（头到脚）、光线均匀、只有你一个人。穿贴身的短袖上衣和修身长裤，不要穿裙子或宽松外套；长发拨到肩后，露出脖子和肩膀；手臂自然垂下、别挡住腰。随手拍的照片可以点“生成形象照”整理成标准底片。',
-  shirt:'白底平铺或挂拍，一张图只放一件，拍全整件、扣好扣子。名字可以写面料和花色，比如“蓝白细条纹牛津纺”。',
-  pants:'白底平铺，拍全裤长。', shoes:'白底、斜侧 45 度拍一双。试鞋时底片必须拍到脚。',
-  accessory:'一张图一件，并写上它是什么（项链、耳环、手表、腰带、包、眼镜），模型靠这个名字决定戴在哪。'
-};
+const LABEL={person:'我的照片',shirt:'衬衫',pants:'裤子',shoes:'鞋子',accessory:'配饰'};
+const HANGER='<svg class="hanger" viewBox="0 0 82 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M41 15c0-3 4-3.5 4-7a4 4 0 0 0-8 0"/><path d="M41 15 5 30h72z"/></svg>';
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
-  for(const[k,v]of Object.entries(attrs)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,'');else if(v!==false&&v!=null)e.setAttribute(k,v)}
+  for(const[k,v]of Object.entries(attrs)){if(k==='class')e.className=v;else if(k==='html')e.innerHTML=v;else if(k==='style')e.setAttribute('style',v);
+    else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,'');else if(v!==false&&v!=null)e.setAttribute(k,v)}
   for(const k of kids.flat())if(k!=null)e.append(k);return e}
+const hoverable=matchMedia('(hover:hover)').matches;
 
 let S={items:[],looks:[],config:{}};
-let portraiting=null, tab='shirt', job=null, viewing=null, fresh=false, peek=false;
+let job=null, viewing=null, peek=false, est=null, estKey='', estTimer=null, portraiting=null;
 const blank={person:null,shirt:null,pants:null,shoes:null,accessories:[],tuck:'in',sleeves:'down',collar:'open'};
 let sel={...blank};
 try{sel={...blank,...JSON.parse(localStorage.getItem('sel')||'{}')}}catch(e){}
@@ -198,72 +245,159 @@ async function api(path,opts={}){
 }
 const item=id=>S.items.find(i=>i.id===id);
 const src=i=>`/media/items/${i.file}`;
+const cut=i=>i.cut?`/media/items/${i.cut}`:src(i);
+const of=c=>S.items.filter(i=>i.category===c);
 function say(t){$('msg').textContent=t||''}
 
 async function refresh(){
   S=await api('/api/state');
   for(const k of['person','shirt','pants','shoes'])if(sel[k]&&!item(sel[k]))sel[k]=null;
   sel.accessories=sel.accessories.filter(item);
-  if(!sel.person){const p=S.items.find(i=>i.category==='person');if(p)sel.person=p.id}
-  if(viewing&&!S.looks.find(l=>l.id===viewing.id))viewing=null;
-  if(!S.items.some(i=>i.category==='person'))tab='person';
+  if(!sel.person){const p=of('person')[0];if(p)sel.person=p.id}
+  if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){renderStatus();renderTabs();renderGrid();renderSlots();renderMirror();renderLooks()}
+function render(){$('demo').hidden=!S.config.demo;renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer()}
 
-function renderStatus(){
-  const s=$('status'),d=S.config.demo;
-  s.className='status'+(d?' demo':'');
-  s.hidden=!d;
-  s.textContent='演示模式 · 还没填 key';
-  $('count').textContent=`${S.items.filter(i=>i.category!=='person').length} 件`;
-}
-function renderTabs(){
-  $('tabs').replaceChildren(...CATS.map(c=>h('button',{class:'tab',role:'tab','aria-selected':String(tab===c.id),
-    onclick(){tab=c.id;renderTabs();renderGrid()}},c.label,h('small',{},String(S.items.filter(i=>i.category===c.id).length)))));
-}
-function isOn(i){return i.category==='accessory'?sel.accessories.includes(i.id):sel[i.category]===i.id}
-function pick(i){
+/* ---------- 衣杆和鞋架 ---------- */
+const isOn=i=>i.category==='accessory'?sel.accessories.includes(i.id):sel[i.category]===i.id;
+function wearIt(i){
   if(job)return;
   if(i.category==='accessory'){
     const a=sel.accessories;
     if(a.includes(i.id))sel.accessories=a.filter(x=>x!==i.id);
-    else if(a.length>=S.config.max_accessories){say(`配饰一次最多 ${S.config.max_accessories} 件。先取下一件再加。`);return}
+    else if(a.length>=S.config.max_accessories){say(`配饰一次最多 ${S.config.max_accessories} 件。`);return}
     else a.push(i.id);
-  }else sel[i.category]=(sel[i.category]===i.id&&i.category!=='person')?null:i.id;
+  }else sel[i.category]=sel[i.category]===i.id?null:i.id;
   viewing=null;say('');keep();render();
 }
-function renderGrid(){
-  const c=CATS.find(x=>x.id===tab), list=S.items.filter(i=>i.category===tab);
-  const cards=list.map(i=>h('div',{class:'item'+(i.category==='person'?' person':'')+(isOn(i)?' on':'')},
-    h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':(i.name||c.label),onclick:()=>pick(i)},h('img',{src:src(i),alt:'',loading:'lazy'})),
-    h('button',{class:'del','aria-label':'删除',title:'删除',async onclick(){
-      if(!confirm('从衣橱里删除这张图？已经生成的试穿照不受影响。'))return;
-      try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'),
-    h('input',{value:i.name,placeholder:tab==='accessory'?'这是什么？如：手表':'起个名字（可选）',maxlength:40,'aria-label':'名字',
-      async onchange(ev){try{await api('/api/items/'+i.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ev.target.value})});i.name=ev.target.value.trim();viewing=null;renderSlots()}catch(e){say(e.message)}}}),
-    i.category==='person'&&!i.from?h('button',{class:'mk',disabled:portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景的标准底片'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
-      async onclick(){
-        portraiting=i.id;renderGrid();say('');
-        try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep();await refresh()}
-        catch(e){say(e.message)}finally{portraiting=null;renderGrid()}
-      }},portraiting===i.id?'生成中…':'生成形象照'):null
-  ));
-  $('grid').replaceChildren(h('button',{class:'add',onclick:()=>$('file').click()},h('b',{},'+'),'添加'+c.label),...cards);
-  $('tip').textContent=TIPS[tab];
+async function remove(i){
+  if(!confirm(`把“${i.name||LABEL[i.category]}”从衣橱里拿走？已经生成的试穿照不受影响。`))return;
+  try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}
 }
-$('file').addEventListener('change',async ev=>{
-  const files=[...ev.target.files];ev.target.value='';say('');
-  for(const f of files){
-    const fd=new FormData();fd.append('file',f);fd.append('category',tab);
-    try{const it=await api('/api/items',{method:'POST',body:fd});
-      if(tab==='person'||!sel[tab]&&tab!=='accessory')sel[tab]=it.id;
-    }catch(e){say(e.message)}
+function piece(i,cls,i0){
+  const img=h('img',{src:cut(i),alt:i.name||LABEL[i.category],draggable:'false',class:i.cut?'':'card'});
+  const el=h('div',{class:cls+(isOn(i)?' on':''),style:`--d:${-(i0*1.37%5).toFixed(2)}s;--t:${(5+i0*0.7%2.5).toFixed(2)}s`},
+    cls==='hang'?h('span',{html:HANGER}):null,
+    h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':(i.name||LABEL[i.category])+(isOn(i)?'（已穿上）':''),onclick:()=>{unfocus(true);wearIt(i)}},img),
+    h('span',{class:'tag'},i.name||LABEL[i.category]),
+    h('button',{class:'x','aria-label':'拿走',title:'拿走',onclick:()=>remove(i)},'×'));
+  if(hoverable){
+    let t;
+    el.querySelector('.pick').addEventListener('mouseenter',()=>{clearTimeout(t);t=setTimeout(()=>focusOn(i,img,el),90)});
+    el.querySelector('.pick').addEventListener('mouseleave',()=>{clearTimeout(t);unfocus()});
   }
-  viewing=null;await refresh();
-});
+  return el;
+}
+function renderRail(){
+  const list=[...of('shirt'),...of('pants')];
+  $('rail').replaceChildren(...list.map((i,n)=>piece(i,'hang',n)),
+    h('button',{class:'add',onclick:()=>pickFiles('shirt')},h('i',{html:HANGER}),h('span',{},'+'),'挂一件衣服'));
+}
+function renderShelf(){
+  const list=[...of('shoes'),...of('accessory')];
+  $('shelf').replaceChildren(...list.map((i,n)=>piece(i,'thing',n)),
+    h('button',{class:'add',onclick:()=>pickFiles('shoes')},h('span',{},'+'),'鞋子 / 配饰'));
+}
 
-let est=null, estKey='', estTimer=null;
+/* 鼠标划过：衣服飞到画面中心，比在身前 */
+let ghost=null, ghostFrom=null, ghostEl=null;
+function target(i){
+  const r=$('stage').getBoundingClientRect(), W=r.width, H=r.height;
+  const spec={shirt:[.40,.16,.42],pants:[.34,.42,.48],shoes:[.26,.80,.16],accessory:[.18,.30,.18]}[i.category];
+  const w=Math.min(W*spec[0]*1.4,H*spec[2]*1.25), hh=H*spec[2]*1.25;
+  return{left:r.left+W/2-w/2,top:r.top+H*spec[1],width:w,height:hh};
+}
+function focusOn(i,img,el){
+  unfocus(true);
+  const a=img.getBoundingClientRect(), b=target(i);
+  ghost=h('img',{class:'ghost',src:img.src,alt:''});
+  Object.assign(ghost.style,{left:a.left+'px',top:a.top+'px',width:a.width+'px',height:a.height+'px'});
+  document.body.append(ghost);
+  ghostFrom=a;ghostEl=el;el.classList.add('away');
+  ghost.animate([{left:a.left+'px',top:a.top+'px',width:a.width+'px',height:a.height+'px',transform:'rotate(-2deg)'},
+                 {left:b.left+'px',top:b.top+'px',width:b.width+'px',height:b.height+'px',transform:'rotate(0)'}],
+                {duration:520,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
+  $('stage').classList.add('focus');
+  $('caption').replaceChildren(i.name||LABEL[i.category],h('small',{},isOn(i)?'已穿上 · 点一下脱下':'点一下穿上'));
+}
+function unfocus(now){
+  if(!ghost)return;
+  const g=ghost, a=ghostFrom, el=ghostEl; ghost=null;
+  $('stage').classList.remove('focus');
+  if(now||!a){g.remove();el&&el.classList.remove('away');return}
+  const r=g.getBoundingClientRect();
+  g.animate([{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',opacity:1},
+             {left:a.left+'px',top:a.top+'px',width:a.width+'px',height:a.height+'px',opacity:.6}],
+            {duration:380,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).onfinish=()=>{g.remove();el.classList.remove('away')};
+}
+addEventListener('scroll',()=>unfocus(true),{passive:true});
+
+/* ---------- 镜子 ---------- */
+let frameIdx=0, turnTimer=null;
+function frames(){
+  if(viewing&&!peek)return(viewing.turn&&viewing.turn.length?viewing.turn:[viewing.file]).map(f=>'/media/results/'+f+'?t='+viewing.created);
+  const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
+  return p?[src(p)]:[];
+}
+function renderStage(){
+  const st=$('stage'), list=frames();
+  st.querySelectorAll('.empty,.badge,.acts,.busy,.turnhint').forEach(e=>e.remove());
+  clearInterval(turnTimer);turnTimer=null;
+  $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:n?'':'试穿效果',draggable:'false'})));
+  frameIdx=0;
+  matchBackdrop();
+  if(!list.length){
+    st.append(h('div',{class:'empty'},h('b',{},'Hello.'),'先放一张自己的全身照，再从衣杆上挑一件衬衫。',
+      h('button',{onclick:()=>openDrawer()},'放一张照片')));
+  }else if(peek||!viewing)st.append(h('span',{class:'badge'},'原照'));
+  else if(viewing.demo)st.append(h('span',{class:'badge'},'演示图'));
+  if(viewing&&!job&&!peek){
+    const acts=h('div',{class:'acts'});
+    const b=h('button',{},'按住看原照');
+    const on=()=>{peek=true;renderStage()},off=()=>{if(peek){peek=false;renderStage()}};
+    b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);
+    acts.append(b);
+    if(!(viewing.turn&&viewing.turn.length))acts.append(h('button',{title:S.config.turn_cost?`约 ¥${S.config.turn_cost.toFixed(2)}`:'',onclick:makeTurn},'转一圈'));
+    acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
+    st.append(acts);
+  }
+  if(list.length>1&&!job){
+    st.append(h('div',{class:'turnhint'},hoverable?'左右拖动转身':'左右滑动转身'));
+    turnTimer=setInterval(()=>{if(!dragging)show(frameIdx+1)},900);
+  }
+  if(job)st.append(h('div',{class:'busy'},h('i'),job.step||'生成中'));
+}
+/* 镜子背景取照片边缘的颜色，让人像和背景连成一片 */
+function matchBackdrop(){
+  const f=$('frames').querySelector('img'), st=$('stage');
+  if(!f){st.style.backgroundColor='';st.style.backgroundImage='';return}
+  const go=()=>{try{
+    const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d',{willReadFrequently:true});
+    const w=f.naturalWidth,hh=f.naturalHeight,s=Math.max(4,Math.round(w*.04)),px=[];
+    for(const[sx,sy]of[[0,0],[w-s,0],[0,hh*.4],[w-s,hh*.4]]){x.drawImage(f,sx,sy,s,s,0,0,1,1);px.push(x.getImageData(0,0,1,1).data)}
+    const avg=k=>Math.round(px.reduce((a,p)=>a+p[k],0)/px.length);
+    st.style.backgroundImage='none';st.style.backgroundColor=`rgb(${avg(0)},${avg(1)},${avg(2)})`;
+  }catch(e){}};
+  f.complete&&f.naturalWidth?go():f.addEventListener('load',go,{once:true});
+}
+function show(n){
+  const fs=$('frames').children;if(!fs.length)return;
+  frameIdx=((n%fs.length)+fs.length)%fs.length;
+  [...fs].forEach((f,k)=>f.classList.toggle('show',k===frameIdx));
+}
+/* 跟着鼠标轻轻侧身；有多角度时拖动转身 */
+let dragging=false, dragX=0, dragStart=0;
+$('stage').addEventListener('pointermove',e=>{
+  const r=e.currentTarget.getBoundingClientRect(), x=(e.clientX-r.left)/r.width-.5;
+  if(dragging){show(dragStart+Math.round((e.clientX-dragX)/45));return}
+  if(hoverable)$('model').style.transform=`rotateY(${(x*9).toFixed(2)}deg)`;
+});
+$('stage').addEventListener('pointerleave',()=>{$('model').style.transform='';dragging=false});
+$('stage').addEventListener('pointerdown',e=>{if($('frames').children.length>1&&!e.target.closest('button')){dragging=true;dragX=e.clientX;dragStart=frameIdx}});
+addEventListener('pointerup',()=>{dragging=false});
+
+/* ---------- 今天这一身 ---------- */
 function body(force=false){
   return{person_id:sel.person,shirt_id:sel.shirt,pants_id:sel.pants,shoes_id:sel.shoes,accessory_ids:sel.accessories,
     tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,force};
@@ -274,92 +408,118 @@ function estimate(){
   estKey=k;est=null;clearTimeout(estTimer);
   if(!sel.person||!(sel.shirt||sel.pants||sel.shoes||sel.accessories.length))return;
   estTimer=setTimeout(async()=>{
-    try{const r=await api('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:k});
-      if(k===estKey){est=r;renderSlots()}}catch(e){}
+    try{const r=await api('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:k});if(k===estKey){est=r;renderFit()}}catch(e){}
   },200);
 }
-function renderSlots(){
-  const row=(label,i,clear,hint)=>h('div',{class:'slot'},
-    i?h('img',{class:'th',src:src(i),alt:''}):h('div',{class:'th none'}),
-    h('div',{},h('strong',{},label),h('span',{class:'muted'},i?(i.name||'已选'):hint)),
-    i?h('button',{class:'x',onclick(){if(!job)clear()}},'取下'):null);
+function renderFit(){
+  const row=(cat,i,hint,drop)=>h('button',{class:'piece'+(i?' has':''),disabled:!i,onclick:()=>{if(i&&!job)drop()}},
+    i?h('img',{src:cut(i),alt:''}):h('i',{class:'ph'}),
+    h('span',{},LABEL[cat],h('small',{},i?(i.name||'已选'):hint)),i?h('em',{},'脱下'):null);
   const rows=[
-    row('衬衫',item(sel.shirt),()=>{sel.shirt=null;viewing=null;keep();render()},'从衣橱里挑一件'),
-    row('裤子',item(sel.pants),()=>{sel.pants=null;viewing=null;keep();render()},'不选就保留照片里的裤子'),
-    row('鞋子',item(sel.shoes),()=>{sel.shoes=null;viewing=null;keep();render()},'不选就保留照片里的鞋'),
-    ...sel.accessories.map(id=>row('配饰',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})),
+    row('shirt',item(sel.shirt),'从衣杆上挑一件',()=>{sel.shirt=null;viewing=null;keep();render()}),
+    row('pants',item(sel.pants),'不选就穿照片里的',()=>{sel.pants=null;viewing=null;keep();render()}),
+    row('shoes',item(sel.shoes),'不选就穿照片里的',()=>{sel.shoes=null;viewing=null;keep();render()}),
+    ...sel.accessories.map(id=>row('accessory',item(id),'',()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})),
   ];
-  if(!sel.accessories.length)rows.push(row('配饰',null,null,'可选，最多 '+(S.config.max_accessories||3)+' 件'));
-  $('slots').replaceChildren(...rows);
+  if(!sel.accessories.length)rows.push(row('accessory',null,'可选，最多 '+(S.config.max_accessories||3)+' 件'));
+  $('pieces').replaceChildren(...rows);
   $('wear').hidden=!sel.shirt;
-  document.querySelectorAll('.seg div').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
+  document.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
   estimate();
   const any=!!(sel.shirt||sel.pants||sel.shoes||sel.accessories.length), go=$('go');
   go.disabled=!!job||!sel.person||!any;
   go.textContent=job?'正在生成…':est&&est.cached?'调出这一身':'生成试穿';
-  $('cost').textContent=!sel.person?'先在“照片”里放一张全身照':!any?'至少选一件单品':!est?'':
-    est.cached?'这一身生成过，直接调出':
-    S.config.demo?'演示模式，不会真的换装':`约 ¥${est.cost.toFixed(2)} 一次`;
+  $('cost').textContent=!sel.person?'先在“我的照片”里放一张全身照':!any?'':!est?'':
+    est.cached?'这一身生成过，直接调出':S.config.demo?'演示模式，不会真的换装':`约 ¥${est.cost.toFixed(2)}`;
 }
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
 
-function renderMirror(){
-  const m=$('mirror'), u=$('under'), kids=[];
-  const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
-  if(viewing&&!peek){
-    kids.push(h('img',{src:'/media/results/'+viewing.file+'?t='+viewing.created,alt:'试穿效果',class:fresh?'fresh':''}));fresh=false;
-    if(viewing.demo)kids.push(h('span',{class:'tag'},'演示图，未真正换装'));
-  }else if(p){
-    kids.push(h('img',{src:src(p),alt:'原照'}),h('span',{class:'tag'},'原照'));
-  }else kids.push(h('div',{class:'empty'},h('p',{},'先放一张自己的全身照，再挑一件衬衫')));
-  if(job)kids.push(h('div',{class:'busy'},h('ol',{},job.steps.map((s,i)=>h('li',{class:i<job.step_index?'ok':i===job.step_index?'now':''},s)))));
-  m.replaceChildren(...kids);
-  const acts=[];
-  if(viewing&&!job){
-    const base=viewing.sel&&item(viewing.sel.person_id);
-    if(base){const b=h('button',{class:'ghost'},'按住看原照');
-      const on=()=>{peek=true;renderMirror()},off=()=>{if(peek){peek=false;renderMirror()}};
-      b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);
-      b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!peek){e.preventDefault();on()}});b.addEventListener('keyup',off);b.addEventListener('blur',off);
-      acts.push(b)}
-    acts.push(h('button',{class:'ghost',onclick:()=>generate(true)},'重新生成'));
-  }
-  if(!peek)u.replaceChildren(...acts);
-}
-
 function renderLooks(){
-  const s=$('strip');
-  if(!S.looks.length){s.replaceChildren(h('p',{class:'muted'},'生成过的搭配会留在这里，点一下就能调回来，不用重新付费。'));return}
-  s.replaceChildren(...S.looks.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
-    h('button',{class:'view','aria-label':'查看这套搭配',onclick(){
+  $('looks').replaceChildren(...(S.looks.length?S.looks.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
+    h('button',{class:'v','aria-label':'查看这套搭配',onclick(){
       const q=l.sel||{};
       sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
         shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open'};
-      viewing=l;say('');keep();render();window.scrollTo({top:0,behavior:'smooth'})}},
-      h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
-    h('button',{class:'del','aria-label':'删除',title:'删除',async onclick(){
-      if(!confirm('删除这张试穿照？'))return;
-      try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'),
-    h('time',{},new Date(l.created*1000).toLocaleDateString('zh-CN',{month:'long',day:'numeric'}))
-  )));
+      viewing=l;say('');keep();render()}},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
+    h('button',{class:'x','aria-label':'删除',onclick:async()=>{if(!confirm('删除这张试穿照？'))return;
+      try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'))):
+    [h('p',{class:'muted'},'生成过的会留在这里')]));
 }
 
+/* ---------- 生成 ---------- */
+async function follow(r){
+  if(r.cached){viewing=r.look;render();return}
+  job=r.job;render();
+  while(job.status==='running'){
+    await new Promise(ok=>setTimeout(ok,900));
+    job=await api('/api/jobs/'+job.id);renderStage();
+  }
+  const done=job;job=null;
+  if(done.status==='error'){say(done.error);render();return}
+  viewing=done.look;estKey='';await refresh();
+}
 async function generate(force=false){
-  if(job)return;say('');
-  try{
-    const r=await api('/api/tryon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body(force))});
-    if(r.cached){viewing=r.look;fresh=true;render();return}
-    job=r.job;render();
-    while(job.status==='running'){
-      await new Promise(ok=>setTimeout(ok,900));
-      job=await api('/api/jobs/'+job.id);renderMirror();
-    }
-    const done=job;job=null;
-    if(done.status==='error'){say(done.error);render();return}
-    viewing=done.look;fresh=true;estKey='';await refresh();
-  }catch(e){job=null;say(e.message);render()}
+  if(job)return;say('');unfocus(true);
+  try{await follow(await api('/api/tryon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body(force))}))}
+  catch(e){job=null;say(e.message);render()}
+}
+async function makeTurn(){
+  if(job||!viewing)return;say('');
+  try{await follow(await api(`/api/looks/${viewing.id}/turn`,{method:'POST'}))}catch(e){job=null;say(e.message);render()}
 }
 $('go').addEventListener('click',()=>generate(false));
+
+/* ---------- 上传 ---------- */
+let upCat='shirt';
+function pickFiles(cat){upCat=cat;$('file').click()}
+$('file').addEventListener('change',ev=>{const files=[...ev.target.files];ev.target.value='';if(files.length)uploadSheet(files,upCat)});
+function uploadSheet(files,cat){
+  const urls=files.map(f=>URL.createObjectURL(f));
+  const name=h('input',{class:'field',placeholder:'起个名字，比如“蓝白细条纹”（可选）',maxlength:40});
+  const cats=h('div',{class:'cats'});
+  const paint=()=>{cats.replaceChildren(...Object.entries(LABEL).map(([k,v])=>h('button',{'aria-pressed':String(cat===k),onclick:()=>{cat=k;paint()}},v)));
+    name.placeholder=cat==='accessory'?'写清楚是什么：项链、耳环、手表、腰带、包…':cat==='person'?'比如“周末”（可选）':'起个名字，比如“蓝白细条纹”（可选）'};
+  paint();
+  const close=()=>{urls.forEach(u=>URL.revokeObjectURL(u));$('layer').replaceChildren()};
+  const ok=h('button',{class:'btn dark',async onclick(){
+    ok.disabled=true;ok.textContent='放进衣橱…';
+    for(const f of files){
+      const fd=new FormData();fd.append('file',f);fd.append('category',cat);fd.append('name',name.value);
+      try{const it=await api('/api/items',{method:'POST',body:fd});if(cat==='person'||(cat!=='accessory'&&!sel[cat]))sel[cat]=it.id}catch(e){say(e.message)}
+    }
+    close();viewing=null;await refresh();
+  }},'放进衣橱');
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'添加单品'},h('h3',{},'这是什么？'),
+      h('div',{class:'previews'},urls.map(u=>h('img',{src:u,alt:''}))),cats,name,
+      h('p',{class:'muted'},'白底平铺或挂拍，一张图一件，拍全。'),
+      h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),ok))));
+  name.focus();
+}
+
+/* ---------- 我的照片 ---------- */
+let drawerOpen=false;
+function openDrawer(){drawerOpen=true;renderDrawer()}
+function renderDrawer(){
+  if(!drawerOpen){if($('layer').querySelector('.drawer'))$('layer').replaceChildren();return}
+  const close=()=>{drawerOpen=false;renderDrawer()};
+  const cards=of('person').map(i=>h('div',{class:'photo'+(sel.person===i.id?' on':'')},
+    h('button',{class:'pick',onclick:()=>{sel.person=i.id;viewing=null;keep();render()}},h('img',{src:src(i),alt:i.name||'照片'})),
+    h('button',{class:'x','aria-label':'删除',onclick:()=>remove(i)},'×'),
+    h('div',{class:'tag'},i.name||'照片'),
+    i.from?null:h('button',{class:'mk',disabled:!!portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
+      async onclick(){portraiting=i.id;renderDrawer();say('');
+        try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep()}catch(e){say(e.message)}
+        finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照')));
+  $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'drawer',role:'dialog','aria-label':'我的照片'},
+      h('h3',{},'我的照片',h('button',{class:'link',onclick:close},'关闭')),
+      h('p',{class:'muted'},'正面站立、头到脚全身入镜、光线均匀。穿贴身短袖和修身长裤，长发拨到肩后，手臂别挡住腰。随手拍的照片可以点“生成形象照”整理成标准底片。'),
+      h('div',{class:'photos'},cards,h('button',{class:'addp',onclick:()=>pickFiles('person')},'+ 添加照片')))));
+}
+$('open-photos').addEventListener('click',openDrawer);
+addEventListener('keydown',e=>{if(e.key==='Escape'){drawerOpen=false;$('layer').replaceChildren()}});
+
 refresh().catch(e=>say(e.message));
 </script>
 </body>
