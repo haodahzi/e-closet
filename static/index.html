@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>衬衫衣橱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --poplin:#F3F5F8; --paper:#FFFFFF; --ink:#15213A; --ink-soft:#56627B;
+  --oxford:#2F5FA5; --stripe:#D9E4F1; --brass:#8F6D22; --line:#D3DAE5; --danger:#A8322A;
+  --display:"ZCOOL XiaoWei","Songti SC","STSong","SimSun",serif;
+  --body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--poplin);color:var(--ink);font:400 15px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--oxford);outline-offset:2px}
+h1,h2{font-family:var(--display);font-weight:400;margin:0}
+h1{font-size:30px;letter-spacing:.04em}
+h2{font-size:21px;letter-spacing:.03em}
+.muted{color:var(--ink-soft);font-size:13px}
+
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:22px 28px 14px;flex-wrap:wrap}
+.status{font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--paper)}
+.status.demo{border-color:var(--brass);color:var(--brass)}
+
+.room{display:grid;grid-template-columns:minmax(290px,360px) minmax(0,1fr) minmax(270px,330px);gap:22px;padding:0 28px;align-items:start}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:18px}
+
+/* 衣橱 */
+.tabs{display:flex;flex-wrap:wrap;gap:2px;margin:12px 0 14px;border-bottom:1px solid var(--line)}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:6px 6px 8px;font-size:13.5px;color:var(--ink-soft);margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--oxford);font-weight:500}
+.tab small{font-size:12px;margin-left:3px;color:var(--ink-soft);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.item{position:relative}
+.item .pick{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--poplin);overflow:hidden;aspect-ratio:3/4}
+.item .pick img{width:100%;height:100%;object-fit:cover;display:block}
+.item.on .pick{border-color:var(--oxford);box-shadow:0 0 0 2px var(--oxford)}
+/* 选中标记：一粒四孔衬衫扣 */
+.item.on::after{content:"";position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:50%;
+  background:
+    radial-gradient(circle at 37% 37%,var(--oxford) 1.4px,transparent 1.9px),
+    radial-gradient(circle at 63% 37%,var(--oxford) 1.4px,transparent 1.9px),
+    radial-gradient(circle at 37% 63%,var(--oxford) 1.4px,transparent 1.9px),
+    radial-gradient(circle at 63% 63%,var(--oxford) 1.4px,transparent 1.9px),
+    #fff;
+  box-shadow:0 0 0 1.5px var(--oxford), inset 0 0 0 3px #fff, inset 0 0 0 4px var(--stripe)}
+.item .del{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(21,33,58,.72);color:#fff;font-size:15px;line-height:24px;padding:0;opacity:0}
+.item:hover .del,.item .del:focus-visible{opacity:1}
+.item input{width:100%;border:0;border-bottom:1px solid transparent;background:none;font-size:13px;padding:4px 2px;color:var(--ink-soft)}
+.item input:hover,.item input:focus{border-bottom-color:var(--line);color:var(--ink);outline:0}
+.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;aspect-ratio:3/4;border:1.5px dashed var(--oxford);border-radius:4px;color:var(--oxford);background:none;font-size:14px;text-align:center;padding:8px}
+.add:hover{background:var(--stripe)}
+.add b{font-size:26px;font-weight:400;line-height:1}
+.tip{margin:14px 0 0;font-size:13px;color:var(--ink-soft)}
+
+/* 镜子 */
+.mirror{position:relative;margin:0 auto;aspect-ratio:3/4;max-height:calc(100vh - 150px);min-height:420px;border-radius:6px;overflow:hidden;border:1px solid var(--line);
+  background:repeating-linear-gradient(90deg,#fff 0 9px,var(--stripe) 9px 12px)}
+.mirror img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--ink)}
+.mirror img.fresh{animation:reveal .5s ease-out}
+@keyframes reveal{from{opacity:0}to{opacity:1}}
+.mirror .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:28px}
+.mirror .empty p{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:16px 20px;margin:0;max-width:300px;font-family:var(--display);font-size:19px;line-height:1.55}
+.mirror .tag{position:absolute;left:12px;top:12px;background:rgba(255,255,255,.92);border-radius:999px;padding:3px 11px;font-size:12.5px}
+.mirror .busy{position:absolute;inset:0;background:rgba(21,33,58,.78);color:#fff;display:flex;flex-direction:column;justify-content:center;padding:32px;gap:10px}
+.busy ol{list-style:none;margin:0;padding:0;font-size:16px}
+.busy li{padding:5px 0;opacity:.45}
+.busy li.now{opacity:1;font-weight:500}
+.busy li.now::after{content:" …";animation:blink 1.2s steps(2) infinite}
+.busy li.ok{opacity:.8}
+.busy li.ok::after{content:" 好了"}
+@keyframes blink{50%{opacity:0}}
+.under{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap;min-height:38px}
+.msg{margin:10px 0 0;padding:10px 14px;border-radius:4px;font-size:14px;border:1px solid var(--danger);color:var(--danger);background:#fff}
+.msg:empty{display:none}
+
+/* 当前搭配 */
+.slot{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.slot .th{width:56px;height:70px;border-radius:3px;background:var(--poplin);border:1px solid var(--line);object-fit:cover;display:block}
+.slot .th.none{background:repeating-linear-gradient(90deg,#fff 0 5px,var(--stripe) 5px 7px)}
+.slot strong{display:block;font-weight:500}
+.slot .x{border:0;background:none;color:var(--ink-soft);font-size:13px;text-decoration:underline;padding:4px}
+.wear{margin:14px 0 4px}
+.wear[hidden]{display:none}
+.seg{display:grid;grid-template-columns:54px 1fr;align-items:center;gap:8px;margin:7px 0;font-size:14px}
+.seg div{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--paper);padding:6px 4px;font-size:13.5px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.check{display:flex;gap:9px;align-items:flex-start;margin:14px 0;font-size:14px}
+.check input{margin-top:4px;accent-color:var(--oxford)}
+.go{width:100%;border:0;border-radius:4px;background:var(--oxford);color:#fff;padding:13px;font-size:16px;font-weight:500}
+.go:hover:not(:disabled){background:#254E8C}
+.go:disabled{background:#A9B4C6;cursor:not-allowed}
+.ghost{border:1px solid var(--ink);border-radius:4px;background:none;padding:7px 14px;font-size:14px}
+.ghost:hover{background:var(--ink);color:#fff}
+.cost{margin:10px 0 0;text-align:center}
+
+/* 穿过的搭配 */
+.looks{padding:26px 28px 40px}
+.strip{display:flex;gap:12px;overflow-x:auto;padding:14px 2px 8px}
+.look{position:relative;flex:0 0 132px}
+.look button.view{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:3/4;background:var(--ink)}
+.look img{width:100%;height:100%;object-fit:cover;display:block}
+.look.on button.view{box-shadow:0 0 0 2px var(--oxford);border-color:var(--oxford)}
+.look .del{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(21,33,58,.72);color:#fff;font-size:15px;line-height:24px;padding:0;opacity:0}
+.look:hover .del,.look .del:focus-visible{opacity:1}
+.look time{display:block;font-size:12px;color:var(--ink-soft);margin-top:4px}
+
+@media (max-width:1020px){
+  .room{grid-template-columns:1fr;padding:0 16px}
+  .stage{order:-1}
+  .mirror{max-height:none;min-height:0}
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .top,.looks{padding-left:16px;padding-right:16px}
+  .item .del,.look .del{opacity:1}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>衬衫衣橱</h1>
+  <span class="status" id="status"></span>
+</header>
+
+<main class="room">
+  <section class="panel" aria-labelledby="h-closet">
+    <h2 id="h-closet">衣橱</h2>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="grid" id="grid"></div>
+    <p class="tip" id="tip"></p>
+    <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+  </section>
+
+  <section class="stage" aria-label="镜子">
+    <div class="mirror" id="mirror"></div>
+    <div class="under" id="under"></div>
+    <p class="msg" id="msg" role="alert"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-outfit">
+    <h2 id="h-outfit">今天这一身</h2>
+    <div id="slots"></div>
+    <div class="wear" id="wear">
+      <div class="seg"><span>下摆</span><div data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div></div>
+      <div class="seg"><span>袖子</span><div data-k="sleeves"><button data-v="down">放下</button><button data-v="rolled">卷到手肘</button></div></div>
+      <div class="seg"><span>领口</span><div data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div></div>
+      <label class="check"><input type="checkbox" id="refine"><span>加强衬衫细节<br><span class="muted">条纹、格纹、领型走样时打开，会多调用一次专用试穿模型</span></span></label>
+    </div>
+    <button class="go" id="go">生成试穿</button>
+    <p class="muted cost" id="cost"></p>
+  </section>
+</main>
+
+<section class="looks" aria-labelledby="h-looks">
+  <h2 id="h-looks">穿过的搭配</h2>
+  <div class="strip" id="strip"></div>
+</section>
+
+<script>
+const CATS=[{id:'person',label:'我的照片'},{id:'shirt',label:'衬衫'},{id:'pants',label:'裤子'},{id:'shoes',label:'鞋子'},{id:'accessory',label:'配饰'}];
+const TIPS={
+  person:'正面站立、全身入镜（脚也要拍到）、光线均匀、画面里只有你一个人。穿贴身一点、长度接近衬衫的衣服，换装更自然。',
+  shirt:'白底平铺或挂拍，一张图只放一件，拍全整件、扣好扣子。名字可以写面料和花色，比如“蓝白细条纹牛津纺”。',
+  pants:'白底平铺，拍全裤长。', shoes:'白底、斜侧 45 度拍一双。试鞋时底片必须拍到脚。',
+  accessory:'一张图一件，并写上它是什么（手表、领带、皮带、眼镜），模型靠这个名字决定戴在哪。'
+};
+const $=id=>document.getElementById(id);
+function h(tag,attrs={},...kids){const e=document.createElement(tag);
+  for(const[k,v]of Object.entries(attrs)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,'');else if(v!==false&&v!=null)e.setAttribute(k,v)}
+  for(const k of kids.flat())if(k!=null)e.append(k);return e}
+
+let S={items:[],looks:[],config:{}};
+let tab='shirt', job=null, viewing=null, fresh=false, peek=false;
+const blank={person:null,shirt:null,pants:null,shoes:null,accessories:[],tuck:'in',sleeves:'down',collar:'open',refine:false};
+let sel={...blank};
+try{sel={...blank,...JSON.parse(localStorage.getItem('sel')||'{}')}}catch(e){}
+const keep=()=>{try{localStorage.setItem('sel',JSON.stringify(sel))}catch(e){}};
+
+async function api(path,opts={}){
+  let r;
+  try{r=await fetch(path,opts)}catch(e){throw new Error('连不上本地服务。确认终端里的 python app.py 还在运行。')}
+  if(!r.ok){let d='';try{d=(await r.json()).detail}catch(e){} throw new Error(d||`请求失败（${r.status}）`)}
+  return r.json();
+}
+const item=id=>S.items.find(i=>i.id===id);
+const src=i=>`/media/items/${i.file}`;
+function say(t){$('msg').textContent=t||''}
+
+async function refresh(){
+  S=await api('/api/state');
+  for(const k of['person','shirt','pants','shoes'])if(sel[k]&&!item(sel[k]))sel[k]=null;
+  sel.accessories=sel.accessories.filter(item);
+  if(!sel.person){const p=S.items.find(i=>i.category==='person');if(p)sel.person=p.id}
+  if(viewing&&!S.looks.find(l=>l.id===viewing.id))viewing=null;
+  if(!S.items.some(i=>i.category==='person'))tab='person';
+  keep();render();
+}
+function render(){renderStatus();renderTabs();renderGrid();renderSlots();renderMirror();renderLooks()}
+
+function renderStatus(){
+  const s=$('status'),d=S.config.demo;
+  s.className='status'+(d?' demo':'');
+  s.textContent=d?'演示模式：还没填 FAL_KEY，不会真的换装':'已连接 fal.ai';
+}
+function renderTabs(){
+  $('tabs').replaceChildren(...CATS.map(c=>h('button',{class:'tab',role:'tab','aria-selected':String(tab===c.id),
+    onclick(){tab=c.id;renderTabs();renderGrid()}},c.label,h('small',{},String(S.items.filter(i=>i.category===c.id).length)))));
+}
+function isOn(i){return i.category==='accessory'?sel.accessories.includes(i.id):sel[i.category]===i.id}
+function pick(i){
+  if(job)return;
+  if(i.category==='accessory'){
+    const a=sel.accessories;
+    if(a.includes(i.id))sel.accessories=a.filter(x=>x!==i.id);
+    else if(a.length>=S.config.max_accessories){say(`配饰一次最多 ${S.config.max_accessories} 件。先取下一件再加。`);return}
+    else a.push(i.id);
+  }else sel[i.category]=(sel[i.category]===i.id&&i.category!=='person')?null:i.id;
+  viewing=null;say('');keep();render();
+}
+function renderGrid(){
+  const c=CATS.find(x=>x.id===tab), list=S.items.filter(i=>i.category===tab);
+  const cards=list.map(i=>h('div',{class:'item'+(isOn(i)?' on':'')},
+    h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':(i.name||c.label),onclick:()=>pick(i)},h('img',{src:src(i),alt:'',loading:'lazy'})),
+    h('button',{class:'del','aria-label':'删除',title:'删除',async onclick(){
+      if(!confirm('从衣橱里删除这张图？已经生成的试穿照不受影响。'))return;
+      try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'),
+    h('input',{value:i.name,placeholder:tab==='accessory'?'这是什么？如：手表':'起个名字（可选）',maxlength:40,'aria-label':'名字',
+      async onchange(ev){try{await api('/api/items/'+i.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ev.target.value})});i.name=ev.target.value.trim();viewing=null;renderSlots()}catch(e){say(e.message)}}})
+  ));
+  $('grid').replaceChildren(h('button',{class:'add',onclick:()=>$('file').click()},h('b',{},'+'),'添加'+c.label),...cards);
+  $('tip').textContent=TIPS[tab];
+}
+$('file').addEventListener('change',async ev=>{
+  const files=[...ev.target.files];ev.target.value='';say('');
+  for(const f of files){
+    const fd=new FormData();fd.append('file',f);fd.append('category',tab);
+    try{const it=await api('/api/items',{method:'POST',body:fd});
+      if(tab==='person'||!sel[tab]&&tab!=='accessory')sel[tab]=it.id;
+    }catch(e){say(e.message)}
+  }
+  viewing=null;await refresh();
+});
+
+function plan(){
+  const clothes=!!(sel.shirt||sel.pants||sel.shoes), acc=sel.accessories.length>0, ref=sel.refine&&!!sel.shirt;
+  const calls=(clothes?1:0)+(ref?1:0)+(acc?1:0);
+  const cost=(clothes?S.config.edit_price:0)+(acc?S.config.edit_price:0)+(ref?S.config.vton_price:0);
+  return{calls,cost};
+}
+function renderSlots(){
+  const row=(label,i,clear,hint)=>h('div',{class:'slot'},
+    i?h('img',{class:'th',src:src(i),alt:''}):h('div',{class:'th none'}),
+    h('div',{},h('strong',{},label),h('span',{class:'muted'},i?(i.name||'已选'):hint)),
+    i?h('button',{class:'x',onclick(){if(!job)clear()}},'取下'):null);
+  const rows=[
+    row('衬衫',item(sel.shirt),()=>{sel.shirt=null;viewing=null;keep();render()},'从衣橱里挑一件'),
+    row('裤子',item(sel.pants),()=>{sel.pants=null;viewing=null;keep();render()},'不选就保留照片里的裤子'),
+    row('鞋子',item(sel.shoes),()=>{sel.shoes=null;viewing=null;keep();render()},'不选就保留照片里的鞋'),
+    ...sel.accessories.map(id=>row('配饰',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})),
+  ];
+  if(!sel.accessories.length)rows.push(row('配饰',null,null,'可选，最多 '+(S.config.max_accessories||3)+' 件'));
+  $('slots').replaceChildren(...rows);
+  $('wear').hidden=!sel.shirt;
+  document.querySelectorAll('.seg div').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
+  $('refine').checked=sel.refine;
+  const p=plan(), go=$('go');
+  go.disabled=!!job||!sel.person||p.calls===0;
+  go.textContent=job?'正在生成…':'生成试穿';
+  $('cost').textContent=!sel.person?'先在“我的照片”里放一张全身照':p.calls===0?'至少选一件单品':
+    S.config.demo?'演示模式不花钱，只会把单品贴在照片上示意':`这一身要调用 ${p.calls} 次模型，约 $${p.cost.toFixed(2)}；生成过的搭配不重复收费`;
+}
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
+$('refine').addEventListener('change',e=>{if(job){e.target.checked=sel.refine;return}sel.refine=e.target.checked;viewing=null;keep();render()});
+
+function renderMirror(){
+  const m=$('mirror'), u=$('under'), kids=[];
+  const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
+  if(viewing&&!peek){
+    kids.push(h('img',{src:'/media/results/'+viewing.file+'?t='+viewing.created,alt:'试穿效果',class:fresh?'fresh':''}));fresh=false;
+    if(viewing.demo)kids.push(h('span',{class:'tag'},'演示图，未真正换装'));
+  }else if(p){
+    kids.push(h('img',{src:src(p),alt:'原照'}),h('span',{class:'tag'},'原照'));
+  }else kids.push(h('div',{class:'empty'},h('p',{},'先放一张自己的全身照，再挑一件衬衫。')));
+  if(job)kids.push(h('div',{class:'busy'},h('ol',{},job.steps.map((s,i)=>h('li',{class:i<job.step_index?'ok':i===job.step_index?'now':''},s)))));
+  m.replaceChildren(...kids);
+  const acts=[];
+  if(viewing&&!job){
+    const base=viewing.sel&&item(viewing.sel.person_id);
+    if(base){const b=h('button',{class:'ghost'},'按住看原照');
+      const on=()=>{peek=true;renderMirror()},off=()=>{if(peek){peek=false;renderMirror()}};
+      b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);
+      b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!peek){e.preventDefault();on()}});b.addEventListener('keyup',off);b.addEventListener('blur',off);
+      acts.push(b)}
+    acts.push(h('button',{class:'ghost',onclick:()=>generate(true)},'重新生成'));
+  }
+  if(!peek)u.replaceChildren(...acts);
+}
+
+function renderLooks(){
+  const s=$('strip');
+  if(!S.looks.length){s.replaceChildren(h('p',{class:'muted'},'生成过的搭配会留在这里，点一下就能调回来，不用重新付费。'));return}
+  s.replaceChildren(...S.looks.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
+    h('button',{class:'view','aria-label':'查看这套搭配',onclick(){
+      const q=l.sel||{};
+      sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
+        shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open',refine:!!q.refine};
+      viewing=l;say('');keep();render();window.scrollTo({top:0,behavior:'smooth'})}},
+      h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
+    h('button',{class:'del','aria-label':'删除',title:'删除',async onclick(){
+      if(!confirm('删除这张试穿照？'))return;
+      try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'),
+    h('time',{},new Date(l.created*1000).toLocaleDateString('zh-CN',{month:'long',day:'numeric'}))
+  )));
+}
+
+async function generate(force=false){
+  if(job)return;say('');
+  const body={person_id:sel.person,shirt_id:sel.shirt,pants_id:sel.pants,shoes_id:sel.shoes,accessory_ids:sel.accessories,
+    tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,refine:sel.refine,force};
+  try{
+    const r=await api('/api/tryon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.cached){viewing=r.look;fresh=true;render();return}
+    job=r.job;render();
+    while(job.status==='running'){
+      await new Promise(ok=>setTimeout(ok,900));
+      job=await api('/api/jobs/'+job.id);renderMirror();
+    }
+    const done=job;job=null;
+    if(done.status==='error'){say(done.error);render();return}
+    viewing=done.look;fresh=true;await refresh();
+  }catch(e){job=null;say(e.message);render()}
+}
+$('go').addEventListener('click',()=>generate(false));
+refresh().catch(e=>say(e.message));
+</script>
+</body>
+</html>
