@@ -64,6 +64,28 @@ MOCK = os.environ.get("MOCK") == "1" or not P.ready(PIPELINE)
 CATEGORIES = {"person", "shirt", "pants", "shoes", "accessory"}
 MAX_ACCESSORIES = 3
 
+# ---------------------------------------------------------------- 出错记录
+def log_error(where, e):
+    """出错时打印到终端，并追加到 data/errors.log，方便把原因发出来排查（不会记录 key）。"""
+    import traceback
+    msg = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {where}: {type(e).__name__}: {e}"
+    detail = "" if isinstance(e, P.GenError) else traceback.format_exc()
+    print("\n  ✗ " + msg + ("\n" + detail if detail else ""), flush=True)
+    try:
+        with open(DATA / "errors.log", "a", encoding="utf-8") as f:
+            f.write(msg + "\n" + detail + "\n")
+    except Exception:
+        pass
+
+
+def friendly(e):
+    if isinstance(e, (httpx.ConnectError, httpx.ProxyError, httpx.ConnectTimeout)):
+        return "连不上模型服务（网络问题）。检查网络，开着代理的话试试关掉再生成。"
+    if isinstance(e, httpx.TimeoutException):
+        return "模型那边太久没响应，已放弃。稍后再试一次。"
+    return f"生成中断：{type(e).__name__}: {e}"
+
+
 # ---------------------------------------------------------------- 存储
 _lock = threading.Lock()
 
@@ -503,9 +525,11 @@ async def run_job(job, req: TryOn, plan):
             db_save(db)
         job.update(status="done", look=look)
     except P.GenError as e:
+        log_error("run_job", e)
         job.update(status="error", error=str(e))
     except Exception as e:  # 网络断开等
-        job.update(status="error", error=f"生成中断：{type(e).__name__}: {e}")
+        log_error("run_job", e)
+        job.update(status="error", error=friendly(e))
 
 
 # ---------------------------------------------------------------- 接口
@@ -556,6 +580,7 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
                 im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
                     client, [ITEMS / item["orig"]], tidy_prompts(category, item["name"])))))
         except P.GenError as e:
+            log_error("add_item", e)
             raise HTTPException(502, str(e))
     im.save(ITEMS / item["file"], quality=92)
     await asyncio.to_thread(ensure_cut, item)
@@ -646,9 +671,11 @@ async def run_turn(job, look_id):
             else:
                 job.update(status="error", error="这套搭配已经被删除。")
     except P.GenError as e:
+        log_error("run_turn", e)
         job.update(status="error", error=str(e))
     except Exception as e:
-        job.update(status="error", error=f"生成中断：{type(e).__name__}: {e}")
+        log_error("run_turn", e)
+        job.update(status="error", error=friendly(e))
 
 
 @app.post("/api/looks/{look_id}/turn")
@@ -696,6 +723,7 @@ async def make_portrait(item_id: str):
             async with httpx.AsyncClient(timeout=180) as client:
                 im = await fetch_image(client, await P.EDIT[EDITOR](client, [src], portrait_prompts()))
         except P.GenError as e:
+            log_error("make_portrait", e)
             raise HTTPException(502, str(e))
     new_id = uuid.uuid4().hex[:12]
     normalize_image(_jpeg(im)).save(ITEMS / f"{new_id}.jpg", quality=92)
@@ -730,6 +758,7 @@ async def tidy_item(item_id: str):
             im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
                 client, [ITEMS / orig], tidy_prompts(it["category"], it.get("name", ""))))))
     except P.GenError as e:
+        log_error("tidy_item", e)
         raise HTTPException(502, str(e))
     new_file = f"{item_id}_t{int(time.time())}.jpg"
     im.save(ITEMS / new_file, quality=92)

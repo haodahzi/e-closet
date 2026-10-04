@@ -302,7 +302,13 @@ async def ark_judge(client, refs, result, wear_txt):
         text = r.json()["choices"][0]["message"]["content"]
         j = json.loads(text[text.index("{"):text.rindex("}") + 1])
         return {k: bool(j.get(k)) for k in CHECKS} | {"note": str(j.get("note", ""))[:120]}
-    except Exception:
+    except Exception as e:
+        body = ""
+        try:
+            body = r.text[:200]
+        except Exception:
+            pass
+        print(f"\n  · 自动检查没做成（不影响出图）：{type(e).__name__}: {e} {body}", flush=True)
         return None  # 检查失败不影响出图
 
 
