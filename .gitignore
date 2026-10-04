@@ -3,7 +3,3 @@ data/
 __pycache__/
 *.pyc
 .venv/
-bench/images/*
-!bench/images/.gitkeep
-bench/out/
-bench/outfits.json

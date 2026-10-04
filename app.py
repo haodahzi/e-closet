@@ -340,15 +340,48 @@ async def execute(plan, client, on_step=lambda i, s: None, mock=None, item_dir=I
 JOBS = {}
 
 
+TRIES = max(1, int(P.env("AUTO_RETRY", "2")))  # 一身最多生成几次（自动检查不合格时重来）
+
+
+def check_refs(req: TryOn):
+    """自动检查用的对照图：原照 + 这一身的每件单品。"""
+    items = db_load()["items"]
+    refs = [("person", ITEMS / items[req.person_id]["file"])]
+    for label, i in (("shirt", req.shirt_id), ("trousers", req.pants_id), ("shoes", req.shoes_id)):
+        if i in items:
+            refs.append((label, ITEMS / items[i]["file"]))
+    refs += [(items[i].get("name") or "accessory", ITEMS / items[i]["file"]) for i in req.accessory_ids if i in items]
+    return refs
+
+
 async def run_job(job, req: TryOn, plan):
     try:
+        checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
+        wear = wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) if req.shirt_id else ""
+        best, qa = None, None
         async with httpx.AsyncClient(timeout=180) as client:
-            im = await execute(plan, client, lambda i, s: job.update(step_index=i, step=s["label"]))
+            for attempt in range(TRIES if checking else 1):
+                im = await execute(plan, client, lambda i, s: job.update(
+                    step_index=i, step=s["label"] if attempt == 0 else "效果不理想，重新生成"))
+                if not checking:
+                    best = im
+                    break
+                job.update(step_index=len(plan["steps"]), step="检查效果")
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=90)
+                r = await P.ark_judge(client, check_refs(req), "data:image/jpeg;base64," +
+                                      __import__("base64").b64encode(buf.getvalue()).decode(), wear)
+                score = -1 if r is None else sum(r[k] for k in P.CHECKS)
+                if best is None or score > (-1 if qa is None else sum(qa[k] for k in P.CHECKS)):
+                    best, qa = im, r
+                if r is None or score == len(P.CHECKS):
+                    break
+        im = best
         job.update(step="保存结果")
         look_id = uuid.uuid4().hex[:12]
         im.save(RESULTS / f"{look_id}.jpg", quality=95)
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
-                "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"],
+                "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"], "check": qa,
                 "sel": req.model_dump(exclude={"force"})}
         with _lock:
             db = db_load()
@@ -367,19 +400,11 @@ async def run_job(job, req: TryOn, plan):
 # ---------------------------------------------------------------- 接口
 app = FastAPI(title="衬衫衣橱")
 app.mount("/media", StaticFiles(directory=DATA), name="media")
-BENCH = ROOT / "bench"
-BENCH.mkdir(exist_ok=True)
-app.mount("/bench-media", StaticFiles(directory=BENCH), name="bench-media")
 
 
 @app.get("/")
 def index():
     return FileResponse(ROOT / "static" / "index.html")
-
-
-@app.get("/bench")
-def bench_page():
-    return FileResponse(ROOT / "static" / "bench.html")
 
 
 @app.get("/api/state")
@@ -389,11 +414,7 @@ def state():
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
-                       "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
-                       "refine_label": "加强衬衫细节" if PIPELINE == "fal" else "精修衣服细节",
-                       "refine_hint": {"seedream": "", "fal": "条纹、格纹走样时打开，多调用一次专用试穿模型；可能把塞进去的下摆放出来",
-                                       "bailian": "条纹、格纹、logo 走样时打开，多调用一次百炼精修模型",
-                                       "kling": ""}[PIPELINE]}}
+                       "portrait_cost": 0 if MOCK else P.price("edit", EDITOR)}}
 
 
 @app.post("/api/items")
@@ -506,8 +527,9 @@ async def tryon(req: TryOn):
         for lk in db["looks"].values():
             if lk["key"] == plan["key"]:
                 return {"cached": True, "look": lk}
+    checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
     job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0,
-           "steps": [s["label"] for s in plan["steps"]]}
+           "steps": [s["label"] for s in plan["steps"]] + (["检查效果"] if checking else [])}
     JOBS[job["id"]] = job
     asyncio.create_task(run_job(job, req, plan))
     return {"cached": False, "job": job}
@@ -520,39 +542,11 @@ def job_status(job_id: str):
     return JOBS[job_id]
 
 
-# ---------------------------------------------------------------- 效果验证打分
-SCORES = BENCH / "out" / "scores.json"
-
-
-@app.get("/api/bench")
-def bench_data():
-    res = BENCH / "out" / "results.json"
-    if not res.exists():
-        return {"results": None, "scores": {}}
-    return {"results": json.loads(res.read_text(encoding="utf-8")),
-            "scores": json.loads(SCORES.read_text(encoding="utf-8")) if SCORES.exists() else {}}
-
-
-class Score(BaseModel):
-    file: str
-    marks: List[str]
-
-
-@app.post("/api/bench/score")
-def bench_score(s: Score):
-    with _lock:
-        scores = json.loads(SCORES.read_text(encoding="utf-8")) if SCORES.exists() else {}
-        scores[s.file] = s.marks
-        SCORES.parent.mkdir(parents=True, exist_ok=True)
-        SCORES.write_text(json.dumps(scores, ensure_ascii=False, indent=1), encoding="utf-8")
-    return {"ok": True}
-
-
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
     mode = "演示模式：还没填 key" if MOCK else f"换装：{P.NAMES[PIPELINE]}，编辑：{P.NAMES[EDITOR]}"
-    print(f"\n  衬衫衣橱已启动: http://127.0.0.1:{port}   （{mode}）\n  效果验证打分页: http://127.0.0.1:{port}/bench\n")
+    print(f"\n  衬衫衣橱已启动: http://127.0.0.1:{port}   （{mode}）\n")
     if os.environ.get("NO_BROWSER") != "1":
         threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

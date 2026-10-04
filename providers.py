@@ -255,6 +255,37 @@ async def seedream_edit(client, images, prompts):
     raise last
 
 
+CHECKS = ("same_person", "shirt_match", "outfit_complete", "natural", "wear_correct")
+
+
+async def ark_judge(client, refs, result, wear_txt):
+    """后台自动检查：用视觉模型对照原照和单品图给结果打分。返回 {检查项: bool, "note": 问题}；检查不了时返回 None。"""
+    names = ["original photo of the person"] + [f"reference {n}" for n, _ in refs[1:]] + ["generated try-on result"]
+    content = [{"type": "text", "text": (
+        "You are a strict quality checker for a virtual try-on app. The images are, in order: "
+        + "; ".join(f"image {i + 1} = {n}" for i, n in enumerate(names)) + ". "
+        "Judge the LAST image against the others. Answer only with JSON, no other text: "
+        '{"same_person": bool (same face, hair, skin tone and body shape as image 1), '
+        '"shirt_match": bool (shirt colour, stripe/check scale and spacing, collar and buttons match the shirt reference; '
+        'true if there is no shirt reference), '
+        '"outfit_complete": bool (every referenced item is worn, in the right place and at a natural scale), '
+        '"natural": bool (pose, background and lighting match image 1; no collage look, no extra limbs or artefacts), '
+        f'"wear_correct": bool (the shirt is worn as requested: {wear_txt or "no specific request"}), '
+        '"note": "the main problem in under 15 words, or empty"}')}]
+    content += [{"type": "image_url", "image_url": {"url": data_uri(p)}} for _, p in refs]
+    content += [{"type": "image_url", "image_url": {"url": result}}]
+    try:
+        r = await client.post(f"{ARK}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
+                                                                 "Content-Type": "application/json"},
+                              json={"model": env("CHECK_MODEL", "doubao-seed-1-6-250615"), "temperature": 0,
+                                    "messages": [{"role": "user", "content": content}]})
+        text = r.json()["choices"][0]["message"]["content"]
+        j = json.loads(text[text.index("{"):text.rindex("}") + 1])
+        return {k: bool(j.get(k)) for k in CHECKS} | {"note": str(j.get("note", ""))[:120]}
+    except Exception:
+        return None  # 检查失败不影响出图
+
+
 # ---------------------------------------------------------------- fal.ai
 def fal_key():
     return env("FAL_KEY")

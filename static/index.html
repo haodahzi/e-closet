@@ -99,9 +99,7 @@ h2{font-size:16px;font-weight:500;margin:0}
 .seg div{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font-size:13px;color:var(--soft)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.check{display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;font-size:13px}
-.check[hidden]{display:none}
-.check input{margin-top:4px;accent-color:var(--ink)}
+.status[hidden]{display:none}
 .go{width:100%;margin-top:18px;border:0;border-radius:var(--r);background:var(--ink);color:#fff;padding:14px;font-size:15px;font-weight:500;letter-spacing:.04em}
 .go:hover:not(:disabled){background:#000}
 .go:disabled{background:var(--faint);cursor:not-allowed}
@@ -162,7 +160,6 @@ h2{font-size:16px;font-weight:500;margin:0}
       <div class="seg"><span>袖子</span><div data-k="sleeves"><button data-v="down">放下</button><button data-v="rolled">卷到手肘</button></div></div>
       <div class="seg"><span>领口</span><div data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div></div>
       </div>
-    <label class="check" id="refine-box"><input type="checkbox" id="refine"><span><span id="refine-label">精修衣服细节</span><br><span class="muted" id="refine-hint"></span></span></label>
     <button class="go" id="go">生成试穿</button>
     <p class="muted cost" id="cost"></p>
   </section>
@@ -188,7 +185,7 @@ function h(tag,attrs={},...kids){const e=document.createElement(tag);
 
 let S={items:[],looks:[],config:{}};
 let portraiting=null, tab='shirt', job=null, viewing=null, fresh=false, peek=false;
-const blank={person:null,shirt:null,pants:null,shoes:null,accessories:[],tuck:'in',sleeves:'down',collar:'open',refine:false};
+const blank={person:null,shirt:null,pants:null,shoes:null,accessories:[],tuck:'in',sleeves:'down',collar:'open'};
 let sel={...blank};
 try{sel={...blank,...JSON.parse(localStorage.getItem('sel')||'{}')}}catch(e){}
 const keep=()=>{try{localStorage.setItem('sel',JSON.stringify(sel))}catch(e){}};
@@ -217,7 +214,8 @@ function render(){renderStatus();renderTabs();renderGrid();renderSlots();renderM
 function renderStatus(){
   const s=$('status'),d=S.config.demo;
   s.className='status'+(d?' demo':'');
-  s.textContent=d?'演示模式 · 还没填 key，不会真的换装':`${S.config.pipeline_name} 换装 · ${S.config.editor_name} 编辑`;
+  s.hidden=!d;
+  s.textContent='演示模式 · 还没填 key';
   $('count').textContent=`${S.items.filter(i=>i.category!=='person').length} 件`;
 }
 function renderTabs(){
@@ -268,7 +266,7 @@ $('file').addEventListener('change',async ev=>{
 let est=null, estKey='', estTimer=null;
 function body(force=false){
   return{person_id:sel.person,shirt_id:sel.shirt,pants_id:sel.pants,shoes_id:sel.shoes,accessory_ids:sel.accessories,
-    tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,refine:sel.refine&&S.config.pipeline!=='kling',force};
+    tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,force};
 }
 function estimate(){
   const k=JSON.stringify(body());
@@ -295,21 +293,15 @@ function renderSlots(){
   $('slots').replaceChildren(...rows);
   $('wear').hidden=!sel.shirt;
   document.querySelectorAll('.seg div').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
-  $('refine').checked=sel.refine;
-  $('refine-box').hidden=!S.config.refine_hint||!(sel.shirt||sel.pants);
-  $('refine-label').textContent=S.config.refine_label||'';
-  $('refine-hint').textContent=S.config.refine_hint||'';
   estimate();
   const any=!!(sel.shirt||sel.pants||sel.shoes||sel.accessories.length), go=$('go');
   go.disabled=!!job||!sel.person||!any;
   go.textContent=job?'正在生成…':est&&est.cached?'调出这一身':'生成试穿';
   $('cost').textContent=!sel.person?'先在“照片”里放一张全身照':!any?'至少选一件单品':!est?'':
-    est.cached?'这一身生成过，直接调出，不再收费':
-    S.config.demo?`演示模式不花钱 · ${est.steps.join(' → ')}`:
-    `${est.steps.join(' → ')} · 约 ¥${est.cost.toFixed(2)}`;
+    est.cached?'这一身生成过，直接调出':
+    S.config.demo?'演示模式，不会真的换装':`约 ¥${est.cost.toFixed(2)} 一次`;
 }
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
-$('refine').addEventListener('change',e=>{if(job){e.target.checked=sel.refine;return}sel.refine=e.target.checked;viewing=null;keep();render()});
 
 function renderMirror(){
   const m=$('mirror'), u=$('under'), kids=[];
@@ -342,7 +334,7 @@ function renderLooks(){
     h('button',{class:'view','aria-label':'查看这套搭配',onclick(){
       const q=l.sel||{};
       sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
-        shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open',refine:!!q.refine};
+        shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open'};
       viewing=l;say('');keep();render();window.scrollTo({top:0,behavior:'smooth'})}},
       h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
     h('button',{class:'del','aria-label':'删除',title:'删除',async onclick(){
