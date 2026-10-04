@@ -1,0 +1,17 @@
+{
+  "person": "me_front.jpg",
+  "outfits": [
+    {"id": "01", "note": "纯色", "shirt": {"file": "white_oxford.jpg", "name": "白色牛津纺"}, "pants": "navy_chino.jpg", "shoes": "brown_loafer.jpg", "tuck": "in"},
+    {"id": "02", "note": "细条纹", "shirt": {"file": "blue_pinstripe.jpg", "name": "蓝白细条纹"}, "pants": "navy_chino.jpg", "shoes": "brown_loafer.jpg", "tuck": "in"},
+    {"id": "03", "note": "细条纹", "shirt": {"file": "blue_pinstripe.jpg", "name": "蓝白细条纹"}, "pants": "grey_wool.jpg", "shoes": "white_sneaker.jpg", "tuck": "out"},
+    {"id": "04", "note": "小格纹", "shirt": {"file": "small_check.jpg", "name": "小格纹"}, "pants": "navy_chino.jpg", "shoes": "white_sneaker.jpg", "tuck": "in", "sleeves": "rolled"},
+    {"id": "05", "note": "小格纹", "shirt": {"file": "small_check.jpg", "name": "小格纹"}, "pants": "grey_wool.jpg", "shoes": "brown_loafer.jpg", "tuck": "out"},
+    {"id": "06", "note": "亚麻纹理", "shirt": {"file": "linen.jpg", "name": "米色亚麻"}, "pants": "grey_wool.jpg", "shoes": "brown_loafer.jpg", "tuck": "out", "sleeves": "rolled"},
+    {"id": "07", "note": "印花", "shirt": {"file": "print.jpg", "name": "印花短袖"}, "pants": "navy_chino.jpg", "shoes": "white_sneaker.jpg", "tuck": "out"},
+    {"id": "08", "note": "加配饰", "shirt": {"file": "white_oxford.jpg", "name": "白色牛津纺"}, "pants": "grey_wool.jpg", "shoes": "brown_loafer.jpg", "tuck": "in",
+     "accessories": [{"file": "watch.jpg", "name": "手表 watch"}, {"file": "belt.jpg", "name": "皮带 belt"}]},
+    {"id": "09", "note": "第二张底片", "person": "me_2.jpg", "shirt": {"file": "blue_pinstripe.jpg", "name": "蓝白细条纹"}, "pants": "grey_wool.jpg", "shoes": "brown_loafer.jpg", "tuck": "in", "collar": "closed"},
+    {"id": "10", "note": "第二张底片，配饰", "person": "me_2.jpg", "shirt": {"file": "small_check.jpg", "name": "小格纹"}, "pants": "navy_chino.jpg", "shoes": "white_sneaker.jpg", "tuck": "out",
+     "accessories": [{"file": "watch.jpg", "name": "手表 watch"}]}
+  ]
+}

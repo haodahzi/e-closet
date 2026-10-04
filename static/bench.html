@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>效果验证打分</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2F1EE;--card:#fff;--tile:#F5F4F1;--tile-hi:#ECEAE6;--ink:#1B1B1A;--soft:#86847F;--faint:#B9B6B0;--line:#E7E5E1;
+  --accent:#C9895B;--good:#4F8A55;--bad:#B4473A;--r-lg:20px;--r:14px;--r-sm:10px;
+  --serif:"Fraunces",serif;--sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 14px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+.top{display:flex;align-items:baseline;gap:12px;padding:22px 32px 6px;flex-wrap:wrap}
+.top b{font:600 26px/1 var(--serif)}.top b i{font-style:normal;color:var(--accent)}
+.top a{color:var(--soft);font-size:13px;margin-left:auto}
+.wrap{padding:0 32px 48px}
+.intro{color:var(--soft);font-size:13px;margin:6px 0 18px;max-width:820px}
+.sum{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px}
+.card{background:var(--card);border-radius:var(--r-lg);padding:18px 20px}
+.card h3{margin:0 0 10px;font-size:13px;font-weight:500;color:var(--soft)}
+.big{font:600 32px/1 var(--serif)}.big small{font:400 13px var(--sans);color:var(--soft);margin-left:6px}
+.bar{height:3px;background:var(--line);border-radius:3px;margin:12px 0 8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ink)}
+.verdict{font-size:12.5px}.verdict.ok{color:var(--good)}.verdict.no{color:var(--bad)}
+.row{background:var(--card);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:14px}
+.rowhead{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.rowhead strong{font:600 18px var(--serif)}
+.rowhead .note{color:var(--soft);font-size:13px}
+.ins{display:flex;gap:6px;margin-left:auto}
+.ins img{width:44px;height:54px;object-fit:contain;background:var(--tile);border-radius:8px;mix-blend-mode:multiply;padding:2px}
+.ins img.p{object-fit:cover;padding:0;mix-blend-mode:normal}
+.pipes{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.pipe h4{margin:0 0 8px;font-size:12.5px;font-weight:500;color:var(--soft)}
+.runs{display:flex;gap:12px;flex-wrap:wrap}
+.run{width:200px;max-width:100%}
+.shot{position:relative;width:100%;aspect-ratio:3/4;border:0;padding:0;border-radius:var(--r);overflow:hidden;background:var(--tile-hi)}
+.shot img{width:100%;height:100%;object-fit:contain;display:block}
+.shot .flag{position:absolute;top:8px;left:8px;font-size:11.5px;padding:2px 10px;border-radius:999px;background:rgba(27,27,26,.72);color:#fff}
+.shot .flag.ok{background:var(--good)}
+.err{width:100%;aspect-ratio:3/4;border-radius:var(--r);background:#FBEDEA;color:var(--bad);font-size:12px;padding:14px;overflow:auto}
+.marks{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.marks button{border:0;border-radius:999px;background:var(--tile);color:var(--soft);font-size:12px;padding:3px 10px}
+.marks button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.meta{font-size:11.5px;color:var(--faint);margin-top:4px}
+.zoom{position:fixed;inset:0;background:rgba(242,241,238,.96);display:none;align-items:center;justify-content:center;z-index:9;cursor:zoom-out;gap:16px;padding:24px}
+.zoom.on{display:flex}.zoom img{max-height:94vh;max-width:48vw;border-radius:var(--r);background:var(--tile-hi)}
+.zoom span{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:12.5px;color:var(--soft)}
+.empty{background:var(--card);border-radius:var(--r-lg);padding:28px;color:var(--soft);line-height:1.9}
+code{background:var(--tile);border-radius:6px;padding:1px 6px;font-size:12.5px}
+@media (max-width:640px){.top,.wrap{padding-left:16px;padding-right:16px}.run{width:calc(50% - 6px)}.ins{margin-left:0}.zoom img{max-width:92vw}}
+</style>
+</head>
+<body>
+<header class="top"><b>e<i>·</i>closet</b><span>效果验证打分</span><a href="/">回到衣橱 →</a></header>
+<main class="wrap">
+  <p class="intro">每张图按五条标准点选，全部选中才算通过。点图片放大，并排显示原照对比。
+    一身搭配在某条流程上「达标」：只跑 1 次时这次通过；跑 3 次时至少 2 次通过。验收线：10 身里至少 8 身达标。</p>
+  <div id="app"></div>
+</main>
+<div class="zoom" id="zoom"><span>点任意处关闭</span><img id="zl" alt="原照"><img id="zr" alt="生成结果"></div>
+<script>
+const MARKS=['像本人','衬衫还原','整身完整','画面自然','穿法正确'];
+const NAMES={bailian:'阿里云百炼',kling:'可灵',fal:'fal.ai'};
+const WEAR={tuck:{in:'塞进',out:'放外面'},sleeves:{down:'袖子放下',rolled:'卷袖'},collar:{open:'解开一粒',closed:'扣到顶'}};
+const $=id=>document.getElementById(id);
+function h(tag,attrs={},...kids){const e=document.createElement(tag);
+  for(const[k,v]of Object.entries(attrs)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!=null&&v!==false)e.setAttribute(k,v)}
+  for(const k of kids.flat())if(k!=null)e.append(k);return e}
+let D={results:null,scores:{}};
+const pass=f=>(D.scores[f]||[]).length===MARKS.length;
+const pipeName=r=>(NAMES[r.pipeline]||r.pipeline)+(r.refine?' + 精修':'');
+
+function render(){
+  const app=$('app');
+  if(!D.results){app.replaceChildren(h('div',{class:'empty'},'还没有结果。把素材放进 ',h('code',{},'bench/images/'),'，写好 ',h('code',{},'bench/outfits.json'),
+    '，然后在终端运行 ',h('code',{},'python bench.py'),'。跑完刷新这一页。'));return}
+  const runs=D.results.runs, outfits=[...new Set(runs.map(r=>r.outfit))].sort(), pipes=[...new Set(runs.map(pipeName))];
+  const cards=pipes.map(p=>{
+    const rs=runs.filter(r=>pipeName(r)===p&&r.file), scored=rs.filter(r=>D.scores[r.file]);
+    const per=outfits.map(o=>rs.filter(r=>r.outfit===o));
+    const judged=per.filter(x=>x.length&&x.every(r=>D.scores[r.file]));
+    const okN=judged.filter(x=>{const n=x.filter(r=>pass(r.file)).length;return x.length>=3?n>=2:n===x.length}).length;
+    const cost=runs.filter(r=>pipeName(r)===p).reduce((a,r)=>a+(r.cost||0),0);
+    const avg=rs.length?rs.reduce((a,r)=>a+(r.seconds||0),0)/rs.length:0;
+    const fails=runs.filter(r=>pipeName(r)===p&&r.error).length;
+    const done=judged.length===outfits.length, good=okN>=Math.ceil(outfits.length*.8);
+    return h('div',{class:'card'},h('h3',{},p),
+      h('div',{class:'big'},`${okN}/${outfits.length}`,h('small',{},'身达标')),
+      h('div',{class:'bar'},h('i',{style:`width:${outfits.length?okN/outfits.length*100:0}%`})),
+      h('div',{class:'verdict '+(done?(good?'ok':'no'):'')},done?(good?'达到验收线':'没达到验收线'):`已打分 ${scored.length}/${rs.length} 张`),
+      h('div',{class:'meta'},`约 ¥${cost.toFixed(1)} · 平均 ${avg.toFixed(0)} 秒/身`+(fails?` · ${fails} 次失败`:'')));
+  });
+  const rows=outfits.map(o=>{
+    const rs=runs.filter(r=>r.outfit===o), first=rs[0];
+    const ins=Object.entries(first.inputs||{}).map(([k,f])=>h('img',{class:k==='person'?'p':'',src:'/bench-media/out/_norm/'+f,alt:k,title:k}));
+    const wear=first.wear?Object.entries(first.wear).map(([k,v])=>WEAR[k][v]).join(' · '):'';
+    return h('section',{class:'row'},
+      h('div',{class:'rowhead'},h('strong',{},o),h('span',{class:'note'},[first.note,wear].filter(Boolean).join(' · ')),h('div',{class:'ins'},ins)),
+      h('div',{class:'pipes'},pipes.map(p=>{
+        const mine=rs.filter(r=>pipeName(r)===p).sort((a,b)=>a.run-b.run);
+        if(!mine.length)return null;
+        return h('div',{class:'pipe'},h('h4',{},p),h('div',{class:'runs'},mine.map(r=>run(r,first))));
+      })));
+  });
+  app.replaceChildren(h('div',{class:'sum'},cards),...rows);
+}
+function run(r,first){
+  if(!r.file)return h('div',{class:'run'},h('div',{class:'err'},`第 ${r.run} 次失败：${r.error}`));
+  const m=D.scores[r.file]||[], ok=pass(r.file);
+  return h('div',{class:'run'},
+    h('button',{class:'shot',onclick(){$('zl').src='/bench-media/out/_norm/'+first.inputs.person;$('zr').src='/bench-media/'+r.file;$('zoom').classList.add('on')}},
+      h('img',{src:'/bench-media/'+r.file,alt:'',loading:'lazy'}),h('span',{class:'flag'+(ok?' ok':'')},ok?'通过':`第 ${r.run} 次`)),
+    h('div',{class:'marks'},MARKS.map(k=>h('button',{'aria-pressed':String(m.includes(k)),async onclick(){
+      const next=m.includes(k)?m.filter(x=>x!==k):[...m,k];
+      D.scores[r.file]=next;render();
+      await fetch('/api/bench/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:r.file,marks:next})});
+    }},k))),
+    h('div',{class:'meta'},`${r.seconds||0}s · ¥${(r.cost||0).toFixed(2)} · ${(r.steps||[]).join(' → ')}`));
+}
+$('zoom').addEventListener('click',()=>$('zoom').classList.remove('on'));
+fetch('/api/bench').then(r=>r.json()).then(d=>{D=d;render()});
+</script>
+</body>
+</html>

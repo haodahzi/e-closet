@@ -1,9 +1,9 @@
-"""衬衫衣橱 —— 本地运行的电子衣橱 + 真人试穿（走 fal.ai API）。
+"""衬衫衣橱 —— 本地运行的电子衣橱 + 真人试穿。
 
 启动:  python app.py   然后浏览器打开 http://127.0.0.1:8000
-没有填 FAL_KEY 时自动进入演示模式（不花钱，只拼一张示意图）。
+换装走云端模型（阿里云百炼 / 可灵 / fal.ai，见 providers.py），没填 key 时自动进入演示模式（不花钱）。
 """
-import asyncio, base64, hashlib, io, json, os, threading, time, uuid, webbrowser
+import asyncio, hashlib, io, json, os, threading, time, uuid, webbrowser
 from pathlib import Path
 from typing import List, Optional
 
@@ -35,17 +35,31 @@ def load_env():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+            os.environ.setdefault(k.strip(), v.split(" #")[0].strip().strip('"').strip("'"))
 
 
 load_env()
-FAL_KEY = os.environ.get("FAL_KEY", "").strip()
-MOCK = not FAL_KEY or os.environ.get("MOCK") == "1"
-EDIT_MODEL = os.environ.get("EDIT_MODEL", "fal-ai/nano-banana-pro/edit")
-VTON_MODEL = os.environ.get("VTON_MODEL", "fal-ai/kling/v1-5/kolors-virtual-try-on")
-RESOLUTION = os.environ.get("RESOLUTION", "1K")  # 1K / 2K / 4K
-EDIT_PRICE = float(os.environ.get("EDIT_PRICE", "0.15"))  # 美元/张，仅用于界面估价
-VTON_PRICE = float(os.environ.get("VTON_PRICE", "0.07"))
+import providers as P  # noqa: E402  读完 .env 再导入
+
+PIPELINES = ("bailian", "kling", "fal")
+
+
+def default_pipeline():
+    p = P.env("PIPELINE")
+    if p in PIPELINES:
+        return p
+    return next((x for x in PIPELINES if P.ready(x)), "bailian")
+
+
+def default_editor():
+    e = P.env("EDIT_PROVIDER")
+    if e in P.EDIT:
+        return e
+    return "bailian" if P.ready("bailian") or not P.ready("fal") else "fal"
+
+
+PIPELINE, EDITOR = default_pipeline(), default_editor()
+MOCK = os.environ.get("MOCK") == "1" or not P.ready(PIPELINE)
 
 CATEGORIES = {"person", "shirt", "pants", "shoes", "accessory"}
 MAX_ACCESSORIES = 3
@@ -91,13 +105,15 @@ def normalize_image(raw: bytes) -> Image.Image:
 # ---------------------------------------------------------------- 提示词
 PIECE_EN = {"shirt": "shirt", "pants": "trousers", "shoes": "shoes"}
 WEAR_EN = {
-    "tuck": {"in": "The shirt is tucked neatly into the trousers.",
-             "out": "The shirt is worn untucked, hem hanging outside the trousers."},
+    "tuck": {"in": "The shirt is tucked neatly into the trousers, waistband visible.",
+             "out": "The shirt is worn untucked, hem hanging outside over the trousers."},
     "sleeves": {"down": "Shirt sleeves are worn full length with cuffs buttoned.",
                 "rolled": "Shirt sleeves are rolled up to just below the elbow."},
     "collar": {"closed": "The shirt is buttoned all the way up to the collar.",
                "open": "The top shirt button is undone, collar open, no tie."},
 }
+KEEP = ("Keep the person's face, hair, skin tone, body shape, pose, camera framing, background and lighting "
+        "exactly as in image 1.")
 
 
 def named(item, fallback):
@@ -105,19 +121,36 @@ def named(item, fallback):
     return f"{fallback} ({n})" if n else fallback
 
 
+def wear_text(wear):
+    return " ".join(WEAR_EN[k][wear[k]] for k in ("tuck", "sleeves", "collar"))
+
+
 def clothes_prompts(pieces, wear):
-    """pieces: [(category, item)]，图 1 是人，图 2.. 依次是各单品。返回 [正常措辞, 备用措辞]。"""
+    """fal 流程：一次换上全部衣服。图 1 是人，图 2.. 依次是各单品。"""
     refs = ", ".join(f"the {named(it, PIECE_EN[c])} from image {i + 2}" for i, (c, it) in enumerate(pieces))
-    has_shirt = any(c == "shirt" for c, _ in pieces)
-    wear_txt = " ".join(WEAR_EN[k][wear[k]] for k in ("tuck", "sleeves", "collar")) if has_shirt else ""
-    keep = ("Keep the person's face, hair, skin tone, body shape, pose, camera framing, background and lighting "
-            "exactly as in image 1. Anything not being replaced stays as it is in image 1.")
+    wear_txt = wear_text(wear) if any(c == "shirt" for c, _ in pieces) else ""
     fidelity = ("Reproduce every garment faithfully: same colour, fabric texture, pattern and stripe scale, collar "
                 "shape, buttons, stitching and logos. Do not invent details. Fabric should drape, crease and cast "
                 "shadows naturally under the scene's lighting. Output one photorealistic photo.")
-    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {keep} {fidelity}"
+    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {KEEP} " \
+        f"Anything not being replaced stays as it is in image 1. {fidelity}"
     b = (f"Editorial menswear photograph: the same person from image 1, same pose and setting, now wearing {refs}. "
-         f"{wear_txt} {keep} {fidelity}")
+         f"{wear_txt} {KEEP} {fidelity}")
+    return [a, b]
+
+
+def finish_prompts(shoes, wear, has_shirt):
+    """试穿模型换好衬衫裤子之后：换鞋 + 把穿法（塞/放、袖子、领口）调到位。"""
+    todo = []
+    if shoes:
+        todo.append(f"Replace only the person's shoes with the {named(shoes, 'shoes')} from image 2, matching "
+                    "its colour, material and shape at realistic scale.")
+    if has_shirt:
+        todo.append(f"Adjust only how the shirt is worn: {wear_text(wear)} Keep the shirt's colour, fabric, "
+                    "stripe or check scale, collar and buttons exactly as in image 1.")
+    rest = ("The trousers stay exactly as in image 1. " if has_shirt else "") + KEEP
+    a = f"Image 1 is a photo of a person. {' '.join(todo)} {rest} Output one photorealistic photo."
+    b = f"Menswear styling photograph of the same person from image 1, unchanged. {' '.join(todo)} {rest}"
     return [a, b]
 
 
@@ -130,91 +163,6 @@ def accessory_prompts(accs):
     b = (f"Styling photograph: the person from image 1, unchanged, now also wearing {refs}, placed naturally and "
          "at realistic scale. Everything else stays identical to image 1.")
     return [a, b]
-
-
-# ---------------------------------------------------------------- fal.ai
-class FalError(Exception):
-    def __init__(self, msg, status=0):
-        super().__init__(msg)
-        self.status = status
-
-
-def as_input(x):
-    """本地文件转 data URI；已经是 URL 的原样传。"""
-    if isinstance(x, Path):
-        return "data:image/jpeg;base64," + base64.b64encode(x.read_bytes()).decode()
-    return x
-
-
-async def fal_run(client, model, payload):
-    headers = {"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"}
-    r = await client.post(f"https://queue.fal.run/{model}", json=payload, headers=headers)
-    if r.status_code in (401, 403):
-        raise FalError("fal.ai 拒绝了这个 FAL_KEY（无效或余额不足）。检查 .env 里的 FAL_KEY 和 fal.ai 账户余额。", r.status_code)
-    if r.status_code >= 400:
-        raise FalError(f"{model} 提交失败（{r.status_code}）：{r.text[:300]}", r.status_code)
-    j = r.json()
-    status_url, response_url = j["status_url"], j["response_url"]
-    deadline = time.time() + 300
-    while True:
-        st = (await client.get(status_url, headers=headers)).json().get("status")
-        if st == "COMPLETED":
-            break
-        if st not in ("IN_QUEUE", "IN_PROGRESS"):
-            raise FalError(f"{model} 任务状态异常：{st}")
-        if time.time() > deadline:
-            raise FalError(f"{model} 超过 5 分钟没有出图，已放弃。稍后再试。")
-        await asyncio.sleep(1.5)
-    res = await client.get(response_url, headers=headers)
-    if res.status_code >= 400:
-        raise FalError(f"{model} 没有出图（{res.status_code}）：{res.text[:300]}", res.status_code)
-    out = res.json()
-    img = (out.get("images") or [None])[0] or out.get("image")
-    if not img or not img.get("url"):
-        raise FalError(f"{model} 的返回里没有图片：{json.dumps(out)[:300]}")
-    return img["url"]
-
-
-async def fal_edit(client, images, prompts):
-    last = None
-    for p in prompts:  # 第一种措辞被内容过滤误拦时，换一种措辞再试一次
-        try:
-            return await fal_run(client, EDIT_MODEL, {
-                "prompt": p, "image_urls": [as_input(x) for x in images], "num_images": 1,
-                "aspect_ratio": "auto", "resolution": RESOLUTION, "output_format": "jpeg"})
-        except FalError as e:
-            last = e
-            if e.status in (401, 403):
-                break
-    raise last
-
-
-async def fetch_image(client, src) -> Image.Image:
-    if isinstance(src, Path):
-        return Image.open(src).convert("RGB")
-    if src.startswith("data:"):
-        return Image.open(io.BytesIO(base64.b64decode(src.split(",", 1)[1]))).convert("RGB")
-    r = await client.get(src, follow_redirects=True)
-    r.raise_for_status()
-    return Image.open(io.BytesIO(r.content)).convert("RGB")
-
-
-def mock_step(current: Path, refs: List[Path], n: int) -> Path:
-    """演示模式：不换装，只把参考图贴在原照左侧，让流程能走通。"""
-    im = Image.open(current).convert("RGB")
-    w, h = im.size
-    t = max(80, w // 5)
-    d = ImageDraw.Draw(im)
-    for i, r in enumerate(refs):
-        th = ImageOps.fit(Image.open(r).convert("RGB"), (t, t))
-        x, y = 16 + (n * (t + 12)), 16 + i * (t + 12)
-        d.rectangle([x - 4, y - 4, x + t + 3, y + t + 3], fill="white")
-        im.paste(th, (x, y))
-    d.rectangle([0, h - 36, w, h], fill=(21, 33, 58))
-    d.text((14, h - 26), "DEMO MODE - add FAL_KEY to .env for real try-on", fill="white")
-    out = RESULTS / f"_tmp_{uuid.uuid4().hex}.jpg"
-    im.save(out, quality=90)
-    return out
 
 
 # ---------------------------------------------------------------- 试穿流程
@@ -231,7 +179,10 @@ class TryOn(BaseModel):
     force: bool = False
 
 
-def build_plan(req: TryOn, items):
+def build_plan(req: TryOn, items, pipeline=None, editor=None):
+    """把一身搭配拆成几步模型调用。每步: kind / label / provider / 参考图文件名 / 提示词。"""
+    pipeline, editor = pipeline or PIPELINE, editor or EDITOR
+
     def get(i, cat):
         it = items.get(i)
         if not it or it["category"] != cat:
@@ -243,54 +194,135 @@ def build_plan(req: TryOn, items):
     for k, v in wear.items():
         if v not in WEAR_EN[k]:
             raise HTTPException(400, f"穿法参数不对：{k}={v}")
-    pieces = [(c, get(i, c)) for c, i in (("shirt", req.shirt_id), ("pants", req.pants_id), ("shoes", req.shoes_id)) if i]
+    shirt = get(req.shirt_id, "shirt") if req.shirt_id else None
+    pants = get(req.pants_id, "pants") if req.pants_id else None
+    shoes = get(req.shoes_id, "shoes") if req.shoes_id else None
     accs = [get(i, "accessory") for i in sorted(set(req.accessory_ids))]
     if len(accs) > MAX_ACCESSORIES:
         raise HTTPException(400, f"配饰一次最多 {MAX_ACCESSORIES} 件，太多会明显掉质量。")
-    if not pieces and not accs:
+    if not (shirt or pants or shoes or accs):
         raise HTTPException(400, "还没选任何单品。至少选一件衬衫、裤子、鞋子或配饰。")
 
     steps = []
-    if pieces:
-        label = "换上" + "、".join({"shirt": "衬衫", "pants": "裤子", "shoes": "鞋子"}[c] for c, _ in pieces)
-        steps.append({"kind": "edit", "label": label, "refs": [it["file"] for _, it in pieces],
-                      "prompts": clothes_prompts(pieces, wear)})
-    if req.refine and req.shirt_id:
-        steps.append({"kind": "vton", "label": "加强衬衫细节", "refs": [items[req.shirt_id]["file"]]})
+    if pipeline == "fal":
+        pieces = [(c, it) for c, it in (("shirt", shirt), ("pants", pants), ("shoes", shoes)) if it]
+        if pieces:
+            steps.append({"kind": "edit", "provider": "fal", "label": "换上" + "、".join(
+                {"shirt": "衬衫", "pants": "裤子", "shoes": "鞋子"}[c] for c, _ in pieces),
+                "refs": [it["file"] for _, it in pieces], "prompts": clothes_prompts(pieces, wear)})
+        if req.refine and shirt:  # 注意：专用试穿模型可能把塞进去的下摆重新放出来
+            steps.append({"kind": "tryon1", "provider": "fal", "label": "加强衬衫细节", "refs": [shirt["file"]]})
+    else:
+        if pipeline == "bailian" and (shirt or pants):
+            steps.append({"kind": "tryon2", "provider": "bailian",
+                          "label": "换上" + "和".join(x for x, it in (("衬衫", shirt), ("裤子", pants)) if it),
+                          "top": shirt and shirt["file"], "bottom": pants and pants["file"]})
+            if req.refine:
+                steps.append({"kind": "refine", "provider": "bailian", "label": "精修衣服细节",
+                              "top": shirt and shirt["file"], "bottom": pants and pants["file"]})
+        if pipeline == "kling":
+            # 叠穿顺序决定塞法：先衬衫后裤子 = 裤腰压住下摆；先裤子后衬衫 = 下摆盖住裤腰
+            order = [("衬衫", shirt), ("裤子", pants)] if req.tuck == "in" else [("裤子", pants), ("衬衫", shirt)]
+            for label, it in order:
+                if it:
+                    steps.append({"kind": "tryon1", "provider": "kling", "label": f"换上{label}", "refs": [it["file"]]})
+        if shirt or shoes:
+            steps.append({"kind": "edit", "provider": editor,
+                          "label": "换鞋、调整穿法" if shoes and shirt else ("换鞋" if shoes else "调整穿法"),
+                          "refs": [shoes["file"]] if shoes else [], "prompts": finish_prompts(shoes, wear, bool(shirt))})
     if accs:
-        steps.append({"kind": "edit", "label": "戴上配饰", "refs": [it["file"] for it in accs],
-                      "prompts": accessory_prompts(accs)})
-    sig = json.dumps([person["file"], steps, EDIT_MODEL, VTON_MODEL, RESOLUTION, MOCK], ensure_ascii=False, sort_keys=True)
-    cost = sum(EDIT_PRICE if s["kind"] == "edit" else VTON_PRICE for s in steps)
-    return {"person": person, "steps": steps, "key": hashlib.sha1(sig.encode()).hexdigest(),
+        editor_acc = "fal" if pipeline == "fal" else editor
+        n = P.EDIT_MAX_IMAGES[editor_acc] - 1
+        for k in range(0, len(accs), n):
+            chunk = accs[k:k + n]
+            steps.append({"kind": "edit", "provider": editor_acc, "label": "戴上配饰" if len(accs) <= n else
+                          f"戴上配饰（{k // n + 1}）", "refs": [it["file"] for it in chunk],
+                          "prompts": accessory_prompts(chunk)})
+
+    price_kind = {"edit": "edit", "tryon1": "tryon", "tryon2": "tryon", "refine": "refine"}
+    cost = sum(P.price(price_kind[s["kind"]], s["provider"]) for s in steps)
+    models = {k: P.env(k) for k in ("BL_TRYON_MODEL", "BL_EDIT_MODEL", "KLING_TRYON_MODEL", "FAL_EDIT_MODEL",
+                                    "FAL_VTON_MODEL", "RESOLUTION")}
+    sig = json.dumps([person["file"], steps, pipeline, models, MOCK], ensure_ascii=False, sort_keys=True)
+    return {"person": person, "steps": steps, "pipeline": pipeline, "key": hashlib.sha1(sig.encode()).hexdigest(),
             "cost": 0 if MOCK else round(cost, 2)}
+
+
+def mock_step(current: Path, refs: List[Path], n: int, out_dir: Path) -> Path:
+    """演示模式：不换装，只把参考图贴在原照左侧，让流程能走通。"""
+    im = Image.open(current).convert("RGB")
+    w, h = im.size
+    t = max(80, w // 5)
+    d = ImageDraw.Draw(im)
+    for i, r in enumerate(refs):
+        th = ImageOps.fit(Image.open(r).convert("RGB"), (t, t))
+        x, y = 16 + (n * (t + 12)), 16 + i * (t + 12)
+        d.rectangle([x - 4, y - 4, x + t + 3, y + t + 3], fill="white")
+        im.paste(th, (x, y))
+    d.rectangle([0, h - 36, w, h], fill=(26, 26, 26))
+    d.text((14, h - 26), "DEMO MODE - add an API key to .env for real try-on", fill="white")
+    out = out_dir / f"_tmp_{uuid.uuid4().hex}.jpg"
+    im.save(out, quality=90)
+    return out
+
+
+async def fetch_image(client, src) -> Image.Image:
+    if isinstance(src, Path):
+        return Image.open(src).convert("RGB")
+    if src.startswith("data:"):
+        import base64
+        return Image.open(io.BytesIO(base64.b64decode(src.split(",", 1)[1]))).convert("RGB")
+    r = await client.get(src, follow_redirects=True)
+    r.raise_for_status()
+    return Image.open(io.BytesIO(r.content)).convert("RGB")
+
+
+async def execute(plan, client, on_step=lambda i, s: None, mock=None, item_dir=ITEMS):
+    """按计划逐步调用模型，返回最后一张图（URL 或本地 Path）。"""
+    mock = MOCK if mock is None else mock
+    person = item_dir / plan["person"]["file"]
+    f = lambda name: item_dir / name if name else None
+    current, tmp = person, []
+    try:
+        for i, s in enumerate(plan["steps"]):
+            on_step(i, s)
+            refs = [f(x) for x in s.get("refs", [])] + [f(s[k]) for k in ("top", "bottom") if s.get(k)]
+            if mock:
+                await asyncio.sleep(0.6)
+                current = mock_step(current, refs, i, RESULTS)
+                tmp.append(current)
+                continue
+            if s["provider"] in P.EDIT and not P.ready(s["provider"]):
+                raise P.GenError(f"“{s['label']}”这一步要用{P.NAMES[s['provider']]}，但 .env 里还没填它的 key。")
+            if s["kind"] == "edit":
+                current = await P.EDIT[s["provider"]](client, [current] + refs, s["prompts"])
+            elif s["kind"] == "tryon2":
+                current = await P.bailian_tryon(client, current, f(s.get("top")), f(s.get("bottom")))
+            elif s["kind"] == "refine":
+                current = await P.bailian_refine(client, current, person, f(s.get("top")), f(s.get("bottom")))
+            elif s["provider"] == "kling":
+                current = await P.kling_tryon(client, current, refs[0])
+            else:
+                current = await P.fal_tryon(client, current, refs[0])
+        return await fetch_image(client, current)
+    finally:
+        for t in tmp:
+            t.unlink(missing_ok=True)
 
 
 JOBS = {}
 
 
 async def run_job(job, req: TryOn, plan):
-    tmp = []
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            current = ITEMS / plan["person"]["file"]
-            for i, step in enumerate(plan["steps"]):
-                job.update(step_index=i, step=step["label"])
-                refs = [ITEMS / f for f in step["refs"]]
-                if MOCK:
-                    await asyncio.sleep(0.8)
-                    current = mock_step(current, refs, i)
-                    tmp.append(current)
-                elif step["kind"] == "edit":
-                    current = await fal_edit(client, [current] + refs, step["prompts"])
-                else:
-                    current = await fal_run(client, VTON_MODEL, {
-                        "human_image_url": as_input(current), "garment_image_url": as_input(refs[0])})
-            job.update(step="保存结果")
-            look_id = uuid.uuid4().hex[:12]
-            (await fetch_image(client, current)).save(RESULTS / f"{look_id}.jpg", quality=95)
+        async with httpx.AsyncClient(timeout=180) as client:
+            im = await execute(plan, client, lambda i, s: job.update(step_index=i, step=s["label"]))
+        job.update(step="保存结果")
+        look_id = uuid.uuid4().hex[:12]
+        im.save(RESULTS / f"{look_id}.jpg", quality=95)
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
-                "cost": plan["cost"], "demo": MOCK, "sel": req.model_dump(exclude={"force"})}
+                "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"],
+                "sel": req.model_dump(exclude={"force"})}
         with _lock:
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
@@ -299,18 +331,18 @@ async def run_job(job, req: TryOn, plan):
             db["looks"][look_id] = look
             db_save(db)
         job.update(status="done", look=look)
-    except FalError as e:
+    except P.GenError as e:
         job.update(status="error", error=str(e))
     except Exception as e:  # 网络断开等
         job.update(status="error", error=f"生成中断：{type(e).__name__}: {e}")
-    finally:
-        for t in tmp:
-            t.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------- 接口
 app = FastAPI(title="衬衫衣橱")
 app.mount("/media", StaticFiles(directory=DATA), name="media")
+BENCH = ROOT / "bench"
+BENCH.mkdir(exist_ok=True)
+app.mount("/bench-media", StaticFiles(directory=BENCH), name="bench-media")
 
 
 @app.get("/")
@@ -318,13 +350,22 @@ def index():
     return FileResponse(ROOT / "static" / "index.html")
 
 
+@app.get("/bench")
+def bench_page():
+    return FileResponse(ROOT / "static" / "bench.html")
+
+
 @app.get("/api/state")
 def state():
     db = db_load()
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
-            "config": {"demo": MOCK, "edit_model": EDIT_MODEL, "vton_model": VTON_MODEL,
-                       "edit_price": EDIT_PRICE, "vton_price": VTON_PRICE, "max_accessories": MAX_ACCESSORIES}}
+            "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
+                       "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
+                       "refine_label": "加强衬衫细节" if PIPELINE == "fal" else "精修衣服细节",
+                       "refine_hint": {"fal": "条纹、格纹走样时打开，多调用一次专用试穿模型；可能把塞进去的下摆放出来",
+                                       "bailian": "条纹、格纹、logo 走样时打开，多调用一次百炼精修模型",
+                                       "kling": ""}[PIPELINE]}}
 
 
 @app.post("/api/items")
@@ -383,6 +424,15 @@ def delete_look(look_id: str):
     return {"ok": True}
 
 
+@app.post("/api/plan")
+def preview_plan(req: TryOn):
+    """界面上显示要走哪几步、大概多少钱、是否已经生成过。"""
+    db = db_load()
+    plan = build_plan(req, db["items"])
+    cached = any(lk["key"] == plan["key"] for lk in db["looks"].values())
+    return {"steps": [s["label"] for s in plan["steps"]], "cost": plan["cost"], "cached": cached}
+
+
 @app.post("/api/tryon")
 async def tryon(req: TryOn):
     db = db_load()
@@ -405,10 +455,39 @@ def job_status(job_id: str):
     return JOBS[job_id]
 
 
+# ---------------------------------------------------------------- 效果验证打分
+SCORES = BENCH / "out" / "scores.json"
+
+
+@app.get("/api/bench")
+def bench_data():
+    res = BENCH / "out" / "results.json"
+    if not res.exists():
+        return {"results": None, "scores": {}}
+    return {"results": json.loads(res.read_text(encoding="utf-8")),
+            "scores": json.loads(SCORES.read_text(encoding="utf-8")) if SCORES.exists() else {}}
+
+
+class Score(BaseModel):
+    file: str
+    marks: List[str]
+
+
+@app.post("/api/bench/score")
+def bench_score(s: Score):
+    with _lock:
+        scores = json.loads(SCORES.read_text(encoding="utf-8")) if SCORES.exists() else {}
+        scores[s.file] = s.marks
+        SCORES.parent.mkdir(parents=True, exist_ok=True)
+        SCORES.write_text(json.dumps(scores, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"ok": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
-    print(f"\n  衬衫衣橱已启动: http://127.0.0.1:{port}   {'（演示模式：未填 FAL_KEY）' if MOCK else '（已连接 fal.ai）'}\n")
+    mode = "演示模式：还没填 key" if MOCK else f"换装：{P.NAMES[PIPELINE]}，编辑：{P.NAMES[EDITOR]}"
+    print(f"\n  衬衫衣橱已启动: http://127.0.0.1:{port}   （{mode}）\n  效果验证打分页: http://127.0.0.1:{port}/bench\n")
     if os.environ.get("NO_BROWSER") != "1":
         threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
