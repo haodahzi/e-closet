@@ -131,26 +131,57 @@ def cutout(im: Image.Image, holes=False):
     return out
 
 
-CUT_VERSION = 2
-_rembg = None
+CUT_VERSION = 4
+_rembg = {}
 
 
-def ai_cutout(im: Image.Image):
-    """用本地抠图模型（rembg）去背景；没装 rembg 时返回 None，退回白底算法。"""
-    global _rembg
+def _session(name):
+    from rembg import new_session
+    if name not in _rembg:
+        _rembg[name] = new_session(name)
+    return _rembg[name]
+
+
+def skin_share(rgb: Image.Image, mask: Image.Image) -> float:
+    """抠出来的部分里，肤色像素占多少（YCbCr 经验范围）。"""
+    small, m = rgb.copy(), mask.copy()
+    small.thumbnail((256, 256))
+    m = m.resize(small.size)
+    y, cb, cr = small.convert("YCbCr").split()
+    skin = ImageChops.multiply(ImageChops.multiply(cb.point(lambda v: 255 if 80 <= v <= 125 else 0),
+                                                   cr.point(lambda v: 255 if 137 <= v <= 170 else 0)),
+                               y.point(lambda v: 255 if v > 60 else 0))
+    on = m.point(lambda v: 255 if v > 128 else 0)
+    total = on.histogram()[255]
+    return ImageChops.multiply(skin, on).histogram()[255] / max(total, 1)
+
+
+def ai_cutout(im: Image.Image, category):
+    """用本地抠图模型（rembg）去背景；没装 rembg 时返回 None，退回白底算法。
+    衬衫、裤子如果是模特穿着拍的，再用衣服分割模型去掉头、手和身体。返回 (图, 照片里是否有人)。"""
     try:
-        from rembg import new_session, remove
+        from rembg import remove
     except Exception:
         return None
-    if _rembg is None:
-        _rembg = new_session(P.env("REMBG_MODEL", "u2net"))
-    out = remove(im.convert("RGB"), session=_rembg)
-    alpha = out.split()[-1]
-    box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
-    if not box or (box[2] - box[0]) * (box[3] - box[1]) < 0.02 * im.width * im.height:
+    rgb = im.convert("RGB")
+    mask = remove(rgb, session=_session(P.env("REMBG_MODEL", "u2net")), only_mask=True)
+    person = False
+    if category in ("shirt", "pants") and 0.03 < skin_share(rgb, mask) < 0.35:  # 太高说明衣服本身是米色、肤色
+        # 抠出来的东西里有不少皮肤（脸、脖子、手）：是模特穿着拍的，再用衣服分割模型只留下衣服
+        cloth = _session("u2net_cloth_seg").predict(rgb, cc="upper" if category == "shirt" else "lower")[0]
+        cloth = cloth.resize(rgb.size).filter(ImageFilter.MaxFilter(5))
+        both = ImageChops.multiply(mask, cloth)
+        area = lambda m: m.point(lambda v: 255 if v > 128 else 0).histogram()[255]
+        person = True
+        if 0.25 < area(both) / max(area(mask), 1) < 0.92:
+            mask = both.filter(ImageFilter.GaussianBlur(1))
+    box = mask.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box or (box[2] - box[0]) * (box[3] - box[1]) < 0.02 * rgb.width * rgb.height:
         return None
+    out = rgb.copy()
+    out.putalpha(mask)
     m = 10
-    return out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height)))
+    return out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height))), person
 
 
 def ensure_cut(it):
@@ -161,7 +192,8 @@ def ensure_cut(it):
     if not src.exists():
         return False
     im = Image.open(src)
-    out = ai_cutout(im) or cutout(im, holes=it["category"] == "accessory")
+    got = ai_cutout(im, it["category"])
+    out, it["person"] = got if got else (cutout(im, holes=it["category"] == "accessory"), False)
     if it.get("cut"):
         (ITEMS / it["cut"]).unlink(missing_ok=True)
     it["cut"], it["cutv"] = None, CUT_VERSION
@@ -366,8 +398,6 @@ def mock_step(current: Path, refs: List[Path], n: int, out_dir: Path) -> Path:
         x, y = 16 + (n * (t + 12)), 16 + i * (t + 12)
         d.rectangle([x - 4, y - 4, x + t + 3, y + t + 3], fill="white")
         im.paste(th, (x, y))
-    d.rectangle([0, h - 36, w, h], fill=(26, 26, 26))
-    d.text((14, h - 26), "DEMO MODE - add an API key to .env for real try-on", fill="white")
     out = out_dir / f"_tmp_{uuid.uuid4().hex}.jpg"
     im.save(out, quality=90)
     return out
@@ -682,6 +712,39 @@ def _jpeg(im):
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=95)
     return buf.getvalue()
+
+
+@app.post("/api/items/{item_id}/tidy")
+async def tidy_item(item_id: str):
+    """把已有单品（模特图、背景乱的图）整理成干净的白底单品图，原图保留。"""
+    it = db_load()["items"].get(item_id)
+    if not it or it["category"] not in GARMENTS:
+        raise HTTPException(404, "这件单品已经被删除。")
+    if MOCK:
+        raise HTTPException(400, "演示模式不会真的整理。在 .env 里填好 ARK_API_KEY 后再试。")
+    if not P.ready(EDITOR):
+        raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
+    orig = it.get("orig") or it["file"]
+    try:
+        async with httpx.AsyncClient(timeout=180) as client:
+            im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
+                client, [ITEMS / orig], tidy_prompts(it["category"], it.get("name", ""))))))
+    except P.GenError as e:
+        raise HTTPException(502, str(e))
+    new_file = f"{item_id}_t{int(time.time())}.jpg"
+    im.save(ITEMS / new_file, quality=92)
+    upd = {**it, "orig": orig, "file": new_file, "cutv": 0}
+    await asyncio.to_thread(ensure_cut, upd)
+    with _lock:
+        db = db_load()
+        cur = db["items"].get(item_id)
+        if not cur:
+            raise HTTPException(404, "这件单品已经被删除。")
+        for f in {cur["file"], cur.get("cut")} - {orig, None}:
+            (ITEMS / f).unlink(missing_ok=True)
+        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person")})
+        db_save(db)
+        return cur
 
 
 @app.post("/api/plan")
