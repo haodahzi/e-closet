@@ -4,3 +4,4 @@ httpx>=0.27
 pillow>=10.0
 python-multipart>=0.0.9
 pillow-heif>=0.16
+rembg[cpu]>=2.0  # 单品抠图，第一次运行会下载约 170MB 的模型

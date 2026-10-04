@@ -131,22 +131,55 @@ def cutout(im: Image.Image, holes=False):
     return out
 
 
+CUT_VERSION = 2
+_rembg = None
+
+
+def ai_cutout(im: Image.Image):
+    """用本地抠图模型（rembg）去背景；没装 rembg 时返回 None，退回白底算法。"""
+    global _rembg
+    try:
+        from rembg import new_session, remove
+    except Exception:
+        return None
+    if _rembg is None:
+        _rembg = new_session(P.env("REMBG_MODEL", "u2net"))
+    out = remove(im.convert("RGB"), session=_rembg)
+    alpha = out.split()[-1]
+    box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box or (box[2] - box[0]) * (box[3] - box[1]) < 0.02 * im.width * im.height:
+        return None
+    m = 10
+    return out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height)))
+
+
 def ensure_cut(it):
-    """给单品补一张透明底展示图，返回是否新生成。"""
-    if it["category"] not in GARMENTS or (it.get("cut") and (ITEMS / it["cut"]).exists()) or \
-            ("cut" in it and it["cut"] is None):
+    """给单品补一张透明底展示图（只用于界面，给模型的仍是原图）。返回是否有改动。"""
+    if it["category"] not in GARMENTS or it.get("cutv") == CUT_VERSION:
         return False
     src = ITEMS / it["file"]
     if not src.exists():
         return False
-    if "cut" in it and it["cut"] is None:  # 试过，去不了底
-        return False
-    out = cutout(Image.open(src), holes=it["category"] == "accessory")
-    it["cut"] = None
+    im = Image.open(src)
+    out = ai_cutout(im) or cutout(im, holes=it["category"] == "accessory")
+    if it.get("cut"):
+        (ITEMS / it["cut"]).unlink(missing_ok=True)
+    it["cut"], it["cutv"] = None, CUT_VERSION
     if out is not None:
-        it["cut"] = it["id"] + "_cut.png"
+        it["cut"] = f"{it['id']}_cut{CUT_VERSION}.png"
         out.save(ITEMS / it["cut"])
     return True
+
+
+def tidy_prompts(category, name):
+    what = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "accessory": name or "accessory"}[category]
+    a = (f"Extract only the {what} from image 1 and show it alone as a clean e-commerce product photo: "
+         "front view, laid flat and neatly shaped (ghost mannequin style for clothing), centred, on a pure white "
+         "background, soft even light. Keep its exact colour, fabric texture, pattern and stripe/check scale, collar, "
+         "buttons, pockets, logos and details. No person, no hanger, no props, no text.")
+    b = (f"Product photo of the {what} from image 1 on a plain white background, front view, every detail, colour "
+         "and pattern exactly the same. Nothing else in the picture.")
+    return [a, b]
 
 
 # ---------------------------------------------------------------- 提示词
@@ -466,11 +499,14 @@ def state():
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
+                       "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "turn_cost": 0 if MOCK else round(P.price("edit", "seedream") * TURN_VIEWS, 2)}}
 
 
 @app.post("/api/items")
-async def add_item(file: UploadFile = File(...), category: str = Form(...), name: str = Form("")):
+async def add_item(file: UploadFile = File(...), category: str = Form(...), name: str = Form(""),
+                   tidy: str = Form("")):
+    """tidy=1：照片里有模特或背景乱时，先用即梦整理成干净的单品图，再放进衣橱（换装也更准）。"""
     if category not in CATEGORIES:
         raise HTTPException(400, "不认识的分类。")
     try:
@@ -478,10 +514,21 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     except Exception:
         raise HTTPException(400, f"“{file.filename}” 不是能打开的图片。支持 JPG、PNG、WebP、HEIC。")
     item_id = uuid.uuid4().hex[:12]
-    im.save(ITEMS / f"{item_id}.jpg", quality=92)
     item = {"id": item_id, "category": category, "name": name.strip()[:40], "file": f"{item_id}.jpg",
             "created": time.time()}
-    ensure_cut(item)
+    if tidy == "1" and category in GARMENTS and not MOCK:
+        if not P.ready(EDITOR):
+            raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
+        im.save(ITEMS / f"{item_id}_orig.jpg", quality=92)
+        item["orig"] = f"{item_id}_orig.jpg"
+        try:
+            async with httpx.AsyncClient(timeout=180) as client:
+                im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
+                    client, [ITEMS / item["orig"]], tidy_prompts(category, item["name"])))))
+        except P.GenError as e:
+            raise HTTPException(502, str(e))
+    im.save(ITEMS / item["file"], quality=92)
+    await asyncio.to_thread(ensure_cut, item)
     with _lock:
         db = db_load()
         db["items"][item_id] = item
@@ -510,7 +557,7 @@ def delete_item(item_id: str):
         db = db_load()
         it = db["items"].pop(item_id, None)
         if it:
-            for f in (it["file"], it.get("cut")):
+            for f in (it["file"], it.get("cut"), it.get("orig")):
                 if f:
                     (ITEMS / f).unlink(missing_ok=True)
             db_save(db)
