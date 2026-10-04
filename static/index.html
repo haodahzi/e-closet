@@ -79,9 +79,10 @@ button{cursor:pointer}
 .railempty{position:absolute;left:0;right:0;top:120px;text-align:center;color:var(--soft);pointer-events:none}
 
 /* ---------- 鞋架 ---------- */
-.shelfwrap{position:relative;padding:0 28px;border-radius:var(--r);transition:background .4s}
+.shelfwrap{position:relative;padding:0 28px;border-radius:var(--r);transition:background .4s;display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:14px;align-items:end}
+.shelfwrap .ledge{grid-column:1/-1}
 .shelfwrap.flash{background:rgba(201,137,91,.12)}
-.shelflabel{position:absolute;left:30px;bottom:14px;font:400 13px/1 var(--serif);font-style:italic;color:var(--soft)}
+.shelflabel{padding:0 0 10px 2px;font:400 13px/1 var(--serif);font-style:italic;color:var(--soft);white-space:nowrap}
 .shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:0 10px 6px;min-height:92px}
 .shelf::-webkit-scrollbar{display:none}
 .ledge{height:7px;border-radius:4px;background:linear-gradient(#f3f1ed,#d2ccc2);box-shadow:0 4px 8px rgba(0,0,0,.07)}
@@ -185,7 +186,8 @@ button{cursor:pointer}
 @media (max-width:1300px){.bottom{grid-template-columns:1fr}}
 @media (max-width:1000px){
   .mirrorcol .stage{aspect-ratio:3/4;height:auto}
-  .shelflabel{position:static;display:block;margin:0 0 4px 4px}
+  .shelfwrap{grid-template-columns:1fr}
+  .shelflabel{padding:0 0 4px 4px}
   .top{padding:14px 16px 0}
   .room{grid-template-columns:1fr;padding:6px 16px 24px}
   .mirrorcol{width:100%;min-width:0;order:-1}
