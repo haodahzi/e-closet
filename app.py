@@ -134,7 +134,7 @@ def clothes_prompts(pieces, wear):
                 "shadows naturally under the scene's lighting. Output one photorealistic photo.")
     a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {KEEP} " \
         f"Anything not being replaced stays as it is in image 1. {fidelity}"
-    b = (f"Editorial menswear photograph: the same person from image 1, same pose and setting, now wearing {refs}. "
+    b = (f"Editorial fashion photograph: the same person from image 1, same pose and setting, now wearing {refs}. "
          f"{wear_txt} {KEEP} {fidelity}")
     return [a, b]
 
@@ -150,7 +150,25 @@ def finish_prompts(shoes, wear, has_shirt):
                     "stripe or check scale, collar and buttons exactly as in image 1.")
     rest = ("The trousers stay exactly as in image 1. " if has_shirt else "") + KEEP
     a = f"Image 1 is a photo of a person. {' '.join(todo)} {rest} Output one photorealistic photo."
-    b = f"Menswear styling photograph of the same person from image 1, unchanged. {' '.join(todo)} {rest}"
+    b = f"Fashion styling photograph of the same person from image 1, unchanged. {' '.join(todo)} {rest}"
+    return [a, b]
+
+
+def portrait_prompts():
+    """把一张随手拍的全身照整理成标准形象照：同一个人、正面站姿、贴身基础款、干净背景。"""
+    who = "woman" if P.env("GENDER", "woman") == "woman" else "man"
+    base = ("a plain fitted white short-sleeve crew-neck T-shirt tucked into slim straight light-grey trousers, "
+            "and plain white low sneakers")
+    keep = (f"Exactly the same {who} as image 1: identical face and facial features, hairstyle and hair colour, "
+            "skin tone, body shape, height and proportions. Do not beautify, slim or alter the person's identity.")
+    pose = ("Full body from head to feet, standing upright facing the camera, arms relaxed and slightly away from "
+            "the body, hands visible, feet slightly apart. Long hair placed behind the shoulders so the neck, "
+            "collarbones and shoulders are visible.")
+    scene = ("Plain light warm-grey seamless studio background, soft even daylight from the front, no props, "
+             "photorealistic, sharp focus, natural skin texture.")
+    a = f"Image 1 is a photo of a {who}. Create a clean full-body studio photo. {keep} {pose} " \
+        f"Wearing {base}. {scene}"
+    b = f"Studio lookbook base photo of the {who} from image 1, unchanged identity. {pose} Wearing {base}. {scene}"
     return [a, b]
 
 
@@ -362,6 +380,7 @@ def state():
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
+                       "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "refine_label": "加强衬衫细节" if PIPELINE == "fal" else "精修衣服细节",
                        "refine_hint": {"fal": "条纹、格纹走样时打开，多调用一次专用试穿模型；可能把塞进去的下摆放出来",
                                        "bailian": "条纹、格纹、logo 走样时打开，多调用一次百炼精修模型",
@@ -422,6 +441,43 @@ def delete_look(look_id: str):
             (RESULTS / lk["file"]).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
+
+
+@app.post("/api/items/{item_id}/portrait")
+async def make_portrait(item_id: str):
+    """用一张自己的照片生成标准形象照，存成一张新的“照片”。原照保留，两张都能用来试穿。"""
+    it = db_load()["items"].get(item_id)
+    if not it or it["category"] != "person":
+        raise HTTPException(404, "这张照片已经被删除。")
+    src = ITEMS / it["file"]
+    if MOCK:
+        await asyncio.sleep(0.8)
+        out = mock_step(src, [], 0, RESULTS)
+        im = Image.open(out).convert("RGB")
+        out.unlink(missing_ok=True)
+    else:
+        if not P.ready(EDITOR):
+            raise HTTPException(400, f"生成形象照要用{P.NAMES[EDITOR]}的图像编辑，.env 里还没填它的 key。")
+        try:
+            async with httpx.AsyncClient(timeout=180) as client:
+                im = await fetch_image(client, await P.EDIT[EDITOR](client, [src], portrait_prompts()))
+        except P.GenError as e:
+            raise HTTPException(502, str(e))
+    new_id = uuid.uuid4().hex[:12]
+    normalize_image(_jpeg(im)).save(ITEMS / f"{new_id}.jpg", quality=92)
+    item = {"id": new_id, "category": "person", "name": "形象照" + (f"（{it['name']}）" if it.get("name") else ""),
+            "file": f"{new_id}.jpg", "created": time.time(), "from": item_id}
+    with _lock:
+        db = db_load()
+        db["items"][new_id] = item
+        db_save(db)
+    return item
+
+
+def _jpeg(im):
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=95)
+    return buf.getvalue()
 
 
 @app.post("/api/plan")

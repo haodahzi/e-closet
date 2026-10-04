@@ -129,7 +129,7 @@ async def bailian_refine(client, coarse, person, top=None, bottom=None):
     if bottom:
         inp["bottom_garment_url"] = await ds_upload(client, m, bottom)
     return await ds_task(client, {"model": m, "input": inp,
-                                  "parameters": {"gender": env("REFINER_GENDER", "man")}}, "百炼精修")
+                                  "parameters": {"gender": env("GENDER", "woman")}}, "百炼精修")
 
 
 async def bailian_edit(client, images, prompts):

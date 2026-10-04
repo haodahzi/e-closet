@@ -55,6 +55,9 @@ h2{font-size:16px;font-weight:500;margin:0}
 .item:hover .del,.item .del:focus-visible{opacity:1}
 .item input{width:100%;border:0;background:none;font-size:12px;padding:5px 2px 0;color:var(--soft);text-overflow:ellipsis}
 .item input:hover,.item input:focus{color:var(--ink);outline:0}
+.item .mk{width:100%;margin-top:4px;border:0;border-radius:8px;background:var(--tile);color:var(--ink);font-size:11.5px;padding:5px 2px}
+.item .mk:hover:not(:disabled){background:var(--ink);color:#fff}
+.item .mk:disabled{color:var(--faint);cursor:wait}
 .add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;aspect-ratio:4/5;border:1.5px dashed var(--faint);border-radius:var(--r);color:var(--soft);background:none;font-size:12.5px;text-align:center;padding:8px}
 .add:hover{border-color:var(--ink);color:var(--ink)}
 .add b{font-size:22px;font-weight:400;line-height:1}
@@ -173,10 +176,10 @@ h2{font-size:16px;font-weight:500;margin:0}
 <script>
 const CATS=[{id:'person',label:'照片'},{id:'shirt',label:'衬衫'},{id:'pants',label:'裤子'},{id:'shoes',label:'鞋子'},{id:'accessory',label:'配饰'}];
 const TIPS={
-  person:'正面站立、全身入镜（脚也要拍到）、光线均匀、画面里只有你一个人。穿贴身一点、长度接近衬衫的衣服，换装更自然。',
+  person:'正面站立、全身入镜（头到脚）、光线均匀、只有你一个人。穿贴身的短袖上衣和修身长裤，不要穿裙子或宽松外套；长发拨到肩后，露出脖子和肩膀；手臂自然垂下、别挡住腰。随手拍的照片可以点“生成形象照”整理成标准底片。',
   shirt:'白底平铺或挂拍，一张图只放一件，拍全整件、扣好扣子。名字可以写面料和花色，比如“蓝白细条纹牛津纺”。',
   pants:'白底平铺，拍全裤长。', shoes:'白底、斜侧 45 度拍一双。试鞋时底片必须拍到脚。',
-  accessory:'一张图一件，并写上它是什么（手表、领带、皮带、眼镜），模型靠这个名字决定戴在哪。'
+  accessory:'一张图一件，并写上它是什么（项链、耳环、手表、腰带、包、眼镜），模型靠这个名字决定戴在哪。'
 };
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
@@ -184,7 +187,7 @@ function h(tag,attrs={},...kids){const e=document.createElement(tag);
   for(const k of kids.flat())if(k!=null)e.append(k);return e}
 
 let S={items:[],looks:[],config:{}};
-let tab='shirt', job=null, viewing=null, fresh=false, peek=false;
+let portraiting=null, tab='shirt', job=null, viewing=null, fresh=false, peek=false;
 const blank={person:null,shirt:null,pants:null,shoes:null,accessories:[],tuck:'in',sleeves:'down',collar:'open',refine:false};
 let sel={...blank};
 try{sel={...blank,...JSON.parse(localStorage.getItem('sel')||'{}')}}catch(e){}
@@ -240,7 +243,13 @@ function renderGrid(){
       if(!confirm('从衣橱里删除这张图？已经生成的试穿照不受影响。'))return;
       try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'),
     h('input',{value:i.name,placeholder:tab==='accessory'?'这是什么？如：手表':'起个名字（可选）',maxlength:40,'aria-label':'名字',
-      async onchange(ev){try{await api('/api/items/'+i.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ev.target.value})});i.name=ev.target.value.trim();viewing=null;renderSlots()}catch(e){say(e.message)}}})
+      async onchange(ev){try{await api('/api/items/'+i.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ev.target.value})});i.name=ev.target.value.trim();viewing=null;renderSlots()}catch(e){say(e.message)}}}),
+    i.category==='person'&&!i.from?h('button',{class:'mk',disabled:portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景的标准底片'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
+      async onclick(){
+        portraiting=i.id;renderGrid();say('');
+        try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep();await refresh()}
+        catch(e){say(e.message)}finally{portraiting=null;renderGrid()}
+      }},portraiting===i.id?'生成中…':'生成形象照'):null
   ));
   $('grid').replaceChildren(h('button',{class:'add',onclick:()=>$('file').click()},h('b',{},'+'),'添加'+c.label),...cards);
   $('tip').textContent=TIPS[tab];
