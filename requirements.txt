@@ -5,3 +5,4 @@ pillow>=10.0
 python-multipart>=0.0.9
 pillow-heif>=0.16
 rembg[cpu]>=2.0  # 单品抠图，第一次运行会下载约 170MB 的模型
+imageio-ffmpeg>=0.5  # 转一圈：把两段半圈视频拼成一整圈（自带 ffmpeg）

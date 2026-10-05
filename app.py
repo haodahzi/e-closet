@@ -281,6 +281,33 @@ def hang_fit(path, category, own=False):
             "ar": round(h / w, 3), "fill": fill, "v": 4}
 
 
+def person_box(path):
+    """照片里人的位置（头顶、脚底、中心线、宽度，都是 0–1），镜子里按这个把人放到和试穿图一样大。
+    有 rembg 就用抠图模型找人（背景再乱也行），没有就当白底找非白色的部分。"""
+    try:
+        import numpy as np
+        im = Image.open(path).convert("RGB")
+        im.thumbnail((512, 512))
+        try:
+            from rembg import remove
+            m = np.asarray(remove(im, session=_session(P.env("REMBG_MODEL", "u2net")), only_mask=True)) > 128
+        except ImportError:
+            a = np.asarray(im).astype(np.int16)
+            m = (a.min(axis=2) < 205) | (a.max(axis=2) - a.min(axis=2) > 40)
+        ys, xs = np.nonzero(m)
+        if len(ys) < 0.01 * m.size:
+            return None
+        h, w = m.shape
+        y0, y1 = ys.min() / h, (ys.max() + 1) / h
+        if y1 - y0 < 0.2:
+            return None
+        return {"y0": round(y0, 4), "y1": round(y1, 4), "cx": round(float(xs.mean()) / w, 4),
+                "w": round((xs.max() - xs.min() + 1) / w, 4), "cut": bool(y1 > 0.985), "v": 1}
+    except Exception as e:
+        log_error("person_box", e)
+        return None
+
+
 def ensure_cut(it):
     """给单品补一张透明底展示图（只用于界面，给模型的仍是原图）。返回是否有改动。"""
     if it["category"] not in GARMENTS:
@@ -627,6 +654,7 @@ def snapshot(look_id, req: TryOn):
         shutil.copyfile(src, RESULTS / name)
         if cat == "person":
             out["person_file"] = name
+            out["person_pbox"] = it.get("pbox")
         else:
             out["pieces"].append({"category": cat, "name": it.get("name", ""), "file": name})
     return out
@@ -875,6 +903,15 @@ def state():
             db_save(db)
         if [it for it in db["items"].values() if ensure_cut(it)]:  # 旧单品补上透明底展示图
             db_save(db)
+        boxes = False  # 照片里人的位置：镜子里把原照和试穿图摆成一样大
+        for it in db["items"].values():
+            if it["category"] == "person" and "pbox" not in it and (ITEMS / it["file"]).exists():
+                it["pbox"], boxes = person_box(ITEMS / it["file"]), True
+        for lk in db["looks"].values():
+            if lk.get("person_file") and "person_pbox" not in lk and (RESULTS / lk["person_file"]).exists():
+                lk["person_pbox"], boxes = person_box(RESULTS / lk["person_file"]), True
+        if boxes:
+            db_save(db)
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
@@ -882,7 +919,7 @@ def state():
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "fix_cost": 0 if MOCK else P.price("edit", "seedream"),
-                       "turn_cost": 0 if MOCK else P.price("video", "seedance")}}
+                       "turn_cost": 0 if MOCK else P.price("video", "seedance") * (2 if TURN_STYLE == "halves" else 1)}}
 
 
 @app.post("/api/items")
@@ -974,6 +1011,57 @@ def turn_prompt():
             "纯白背景 #FFFFFF，人物全身始终完整在画面中央，大小和位置和第一帧相同，不推拉、不切镜头、不加黑边和文字。")
 
 
+def half_prompt():
+    """半圈：从正面转到背面停住。两段都用这一句（第二段的输入是镜像照片），方向一致才能拼成一整圈。"""
+    return ("360度转台展示的前半圈，相机固定。"
+            "人物站在看不见的旋转台上，以身体中轴为轴心整体匀速旋转半圈（180度）："
+            "从正面开始，从上往下看按逆时针方向转，经过侧面，转到完全背对镜头时停住。"
+            "人物像静止的雕塑：手臂、腿、脚、头、表情都不动，不迈步、不摆手、不扭腰。"
+            "身体比例和五官不变形。服装的颜色、图案、版型和配饰全程不变。"
+            "纯白背景 #FFFFFF，人物全身始终完整在画面中央，大小和位置和第一帧相同，不推拉、不切镜头、不加黑边和文字。")
+
+
+TURN_STYLE = P.env("TURN_STYLE", "halves")  # halves：两段半圈拼成一圈（默认，脸不走样）；single：一次生成一整圈
+
+
+async def _video(client, job, image, prompt, label, last_frame=True):
+    url = await P.seedance_turn(client, image, prompt, lambda s: job.update(step=f"{label}（通常 1–3 分钟）"),
+                                last_frame=last_frame)
+    r = await client.get(url, follow_redirects=True, timeout=P.timeout(300))
+    r.raise_for_status()
+    return r.content
+
+
+async def turn_halves(client, job, src, out):
+    """两段半圈拼一整圈，见 turn.py。方向没转对就重做第二段一次，还不对就退回一次生成一整圈。"""
+    import turn as T
+    tmp = RESULTS / f"_mirror_{uuid.uuid4().hex[:8]}.jpg"
+    files = []
+    try:
+        ImageOps.mirror(Image.open(src).convert("RGB")).save(tmp, quality=95)
+        a, b = await asyncio.gather(_video(client, job, src, half_prompt(), "生成转身视频", False),
+                                    _video(client, job, tmp, half_prompt(), "生成转身视频", False))
+        for _ in range(2):
+            fa, fb = out.with_suffix(".a.mp4"), out.with_suffix(".b.mp4")
+            files += [fa, fb]
+            fa.write_bytes(a)
+            fb.write_bytes(b)
+            job.update(step="拼接转身视频")
+            A = await asyncio.to_thread(T.read_frames, fa)
+            B = await asyncio.to_thread(T.read_frames, fb, True, A[2])
+            if T.opposite_ways(A[1], B[1]):
+                await asyncio.to_thread(T.stitch, A[0], A[1], B[0], B[1], A[2], A[3], out)
+                return True
+            if _:
+                break
+            print("\n  · 两段半圈转的方向不对，重做第二段", flush=True)
+            b = await _video(client, job, tmp, half_prompt(), "重做后半圈", False)
+        return False
+    finally:
+        for f in [tmp, *files]:
+            f.unlink(missing_ok=True)
+
+
 async def run_turn(job, look_id):
     """转一圈：用 Seedance 把正面试穿图做成“原地转身一周、回到正面站定”的短视频。"""
     try:
@@ -983,14 +1071,18 @@ async def run_turn(job, look_id):
         if not P.ready("seedream"):
             raise P.GenError("转一圈要用即梦（火山方舟），.env 里还没填 ARK_API_KEY。")
         job.update(step="生成转身视频")
-        async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
-            url = await P.seedance_turn(client, RESULTS / lk["file"], turn_prompt(),
-                                        lambda s: job.update(step="生成转身视频（通常 1–3 分钟）"))
-            job.update(step="下载视频")
-            r = await client.get(url, follow_redirects=True, timeout=P.timeout(300))
-            r.raise_for_status()
         name = f"{look_id}_turn.mp4"
-        (RESULTS / name).write_bytes(r.content)
+        out = RESULTS / name
+        async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
+            done = False
+            if TURN_STYLE == "halves" and P.env("TURN_MODE", "turntable") != "orbit":
+                try:
+                    import imageio_ffmpeg  # noqa: F401
+                    done = await turn_halves(client, job, RESULTS / lk["file"], out)
+                except ImportError:
+                    print("\n  · 没装 imageio-ffmpeg，转一圈改成一次生成一整圈（pip install -r requirements.txt）", flush=True)
+            if not done:
+                out.write_bytes(await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频"))
         with _lock:
             db = db_load()
             if look_id in db["looks"]:
@@ -998,7 +1090,7 @@ async def run_turn(job, look_id):
                 db_save(db)
                 job.update(status="done", look=db["looks"][look_id])
             else:
-                (RESULTS / name).unlink(missing_ok=True)
+                out.unlink(missing_ok=True)
                 job.update(status="error", error="这套搭配已经被删除。")
     except P.GenError as e:
         log_error("run_turn", e)

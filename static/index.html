@@ -91,12 +91,12 @@ button{cursor:pointer}
 .shelfwrap .ledge{grid-column:1/-1}
 .shelfwrap.flash{background:rgba(201,137,91,.12)}
 .shelflabel{padding:0 0 10px 2px;font:400 13px/1 var(--serif);font-style:italic;color:var(--soft);white-space:nowrap}
-.shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:38px 10px 6px;min-height:130px}
+.shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:34px 10px 6px;min-height:108px}
 .shelf::-webkit-scrollbar{display:none}
 .ledge{height:7px;border-radius:4px;background:linear-gradient(#f3f1ed,#d2ccc2);box-shadow:0 4px 8px rgba(0,0,0,.07)}
-.thing{position:relative;flex:0 0 112px;min-height:92px;justify-content:flex-end;display:flex;flex-direction:column;align-items:center;transition:transform .35s var(--ease)}
+.thing{position:relative;flex:0 0 88px;min-height:72px;justify-content:flex-end;display:flex;flex-direction:column;align-items:center;transition:transform .35s var(--ease)}
 .thing:hover,.thing.front{transform:translateY(-6px) scale(1.12)}
-.thing .pick{border:0;background:none;padding:0;width:104px;height:78px;display:flex;align-items:flex-end;justify-content:center}
+.thing .pick{border:0;background:none;padding:0;width:82px;height:60px;display:flex;align-items:flex-end;justify-content:center}
 .thing .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:drop-shadow(0 6px 6px rgba(60,50,40,.14))}
 .thing .pick img.card{background:#fff;border-radius:6px;padding:4px}
 .thing.on::after{content:"";position:absolute;bottom:-11px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--accent)}
@@ -105,7 +105,7 @@ button{cursor:pointer}
 .thing .tools .x{position:static;opacity:1}
 .thing .tools .t{border:0;border-radius:999px;background:rgba(255,255,255,.95);font-size:11.5px;padding:2px 9px;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .thing .tools .t:hover{background:var(--ink);color:#fff}
-.thing.add button{width:72px;height:72px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
+.thing.add button{width:58px;height:58px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
 .thing.add button:hover{border-color:var(--ink);color:var(--ink)}
 .thing.add{transform:none!important}
 
@@ -461,9 +461,9 @@ $('looks').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)
 /* 鞋架上大小统一：按“实心部分的面积”缩放，而不是按图片外框，细长的项链和宽大的鞋看起来一样分量 */
 function shelfSize(i){
   const f=i.fit; if(!i.cut||!f||!f.fill)return null;
-  const area=5200, w0=Math.sqrt(area/(f.fill*f.ar));
-  let w=Math.min(118,Math.max(44,w0)), hh=w*f.ar;
-  if(hh>84){hh=84;w=hh/f.ar}
+  const area=3300, w0=Math.sqrt(area/(f.fill*f.ar));   /* 鞋架上的东西小一点，按实心面积看起来一样大 */
+  let w=Math.min(92,Math.max(34,w0)), hh=w*f.ar;
+  if(hh>64){hh=64;w=hh/f.ar}
   return `width:${w.toFixed(0)}px;height:${hh.toFixed(0)}px`;
 }
 function renderShelf(){
@@ -487,6 +487,13 @@ function frames(){
   if(peek&&viewing&&viewing.person_file)return['/media/results/'+viewing.person_file];
   const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
   return p?[src(p)]:[];
+}
+/* 镜子里这张图的人在哪：试穿图是白底，浏览器自己量；原照背景乱，用服务器（抠图模型）量好的位置 */
+function frameBox(){
+  if(viewing&&!peek)return'auto';
+  if(peek&&viewing&&viewing.person_file)return viewing.person_pbox||null;
+  const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
+  return p&&p.pbox||null;
 }
 const vid=()=>$('frames').querySelector('video');
 const still=()=>$('frames').querySelector('img');
@@ -525,11 +532,11 @@ function fitStill(){
   const W=box.clientWidth,H=box.clientHeight, ri=f.naturalWidth/f.naturalHeight;
   let iw=Math.min(W,H*ri), ih=iw/ri, ix=(W-iw)/2, iy=(H-ih)/2;
   if(f.dataset.fit){
-    if(f._box===undefined){try{f._box=personBox(f,f.naturalWidth,f.naturalHeight)}catch(e){f._box=null}}
+    if(f._box===undefined){try{f._box=f.dataset.box?JSON.parse(f.dataset.box):personBox(f,f.naturalWidth,f.naturalHeight)}catch(e){f._box=null}}
     const b=f._box;
     if(b&&!b.cut){
       let nh=H*.94/(b.y1-b.y0);
-      nh=Math.min(nh,W*.92/(b.w*ri),ih*2.2);   /* 人不能宽过舞台，也别放得太大糊掉 */
+      nh=Math.min(nh,W*.92/(b.w*ri),ih*4);   /* 人不能宽过舞台；原照里人站得远也放到一样大 */
       ih=nh;iw=nh*ri;iy=H*.03+(H*.94-(b.y1-b.y0)*ih)/2-b.y0*ih;ix=W/2-b.cx*iw;
     }
   }
@@ -582,10 +589,11 @@ function renderStage(){
   const pal=viewing&&!peek&&viewing.palette&&viewing.palette.length?viewing.palette:null;
   const hasVid=viewing&&viewing.video&&!peek&&!job;
   /* 照片、色卡、视频只在真的换了的时候才重画：生成中每秒刷新进度，不会让色卡一闪一闪 */
-  const key=JSON.stringify([list,pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
+  const key=JSON.stringify([list,frameBox(),pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
   if(key!==stageKey){
     stageKey=key;
-    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false','data-fit':viewing&&!peek?'1':null})));
+    const fb=frameBox();
+    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false','data-fit':fb?'1':null,'data-box':fb&&fb!=='auto'?JSON.stringify(fb):null})));
     const f0=still();if(f0){const go=()=>{fitStill();alignVideo()};f0.complete&&f0.naturalWidth?go():f0.addEventListener('load',go,{once:true})}
     const pk=pal?pal.map(c=>c.hex).join():'', old=st.querySelector('.palette');
     if(!old||old.dataset.k!==pk){if(old)old.remove();

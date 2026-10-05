@@ -322,7 +322,7 @@ def video_frame_uri(x, side=1280):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
+async def seedance_turn(client, image, prompt, on_wait=lambda s: None, last_frame=True):
     """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。
     模型按 .env 的 SEEDANCE_MODEL 优先，没开通就依次试候选；参数不被支持（比如 1.0 版不支持尾帧、
     时长只能 5/10 秒、没有音频开关）就自动降级再提交。"""
@@ -336,6 +336,9 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
         tries = [  # 从完整到最简：首尾帧 → 只首帧（提示词里要求最后回到正面）
             {"frames": ["first_frame", "last_frame"], "extra": {"generate_audio": False} if v2 else {}, "secs": secs},
             {"frames": ["first_frame", "last_frame"], "extra": {}, "secs": 5},
+            {"frames": ["first_frame"], "extra": {}, "secs": 5},
+        ] if last_frame else [  # 半圈：只给首帧（尾帧是背面，没有图）
+            {"frames": ["first_frame"], "extra": {"generate_audio": False} if v2 else {}, "secs": 5},
             {"frames": ["first_frame"], "extra": {}, "secs": 5},
         ]
         for t in tries:
