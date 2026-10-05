@@ -294,7 +294,8 @@ async def seedream_views(client, images, prompt, n):
 
 
 SEEDANCE_CANDIDATES = ["doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-260128",
-                       "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"]
+                       "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528",
+                       "doubao-seedance-1-0-lite-i2v-250428"]
 
 
 VIDEO_RATIOS = [(16, 9), (4, 3), (1, 1), (3, 4), (9, 16), (21, 9)]
@@ -323,44 +324,61 @@ def video_frame_uri(x, side=1280):
 
 
 async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
-    """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。
-    模型按 .env 的 SEEDANCE_MODEL 优先，没开通就依次试候选；参数不被支持（比如 1.0 版不支持尾帧、
-    时长只能 5/10 秒、没有音频开关）就自动降级再提交。"""
+    """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回 (视频 URL, 是否用上了尾帧)。
+    尾帧是关键：转回正面时模型要对上照片，脸和姿势才不走样。所以先把开通了的模型挨个用“首尾帧”试一遍，
+    都不支持尾帧才退回“只给首帧”。.env 的 SEEDANCE_MODEL 排在最前面。"""
     pic = video_frame_uri(image)
     h = {"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"}
     models = [m for m in dict.fromkeys([env("SEEDANCE_MODEL"), *SEEDANCE_CANDIDATES]) if m]
+    closed = set()  # 没开通、不存在的模型，第二轮不再试
     last = None
-    for model in models:
+
+    def variants(model, both):
         v2 = "seedance-2" in model
         secs = int(env("VIDEO_SECONDS", "6" if v2 else "5"))
-        tries = [  # 从完整到最简：首尾帧 → 只首帧（提示词里要求最后回到正面）
-            {"frames": ["first_frame", "last_frame"], "extra": {"generate_audio": False} if v2 else {}, "secs": secs},
-            {"frames": ["first_frame", "last_frame"], "extra": {}, "secs": 5},
-            {"frames": ["first_frame"], "extra": {}, "secs": 5},
+        frames = ["first_frame", "last_frame"] if both else ["first_frame"]
+        cam = {"camera_fixed": env("TURN_MODE", "turntable") != "orbit"}
+        return [  # 从完整到最简：时长、音频开关、固定镜头这些参数不被支持就去掉再试
+            {"frames": frames, "extra": {"generate_audio": False, **cam} if v2 else cam, "secs": secs},
+            {"frames": frames, "extra": cam, "secs": 5},
+            {"frames": frames, "extra": {}, "secs": 5},
         ]
-        for t in tries:
-            body = {"model": model,
-                    "content": [{"type": "text", "text": prompt}] +
-                               [{"type": "image_url", "image_url": {"url": pic}, "role": role} for role in t["frames"]],
-                    "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "duration": t["secs"],
-                    "camera_fixed": env("TURN_MODE", "turntable") != "orbit", "watermark": False, **t["extra"]}
-            r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
-            j = r.json() if "json" in r.headers.get("content-type", "") else {}
+
+    for both in (True, False):  # 第一轮：所有模型都试首尾帧；第二轮：只给首帧
+        for model in models:
+            if model in closed:
+                continue
+            for t in variants(model, both):
+                body = {"model": model,
+                        "content": [{"type": "text", "text": prompt}] +
+                                   [{"type": "image_url", "image_url": {"url": pic}, "role": role} for role in t["frames"]],
+                        "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "duration": t["secs"],
+                        "watermark": False, **t["extra"]}
+                r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
+                j = r.json() if "json" in r.headers.get("content-type", "") else {}
+                if r.status_code < 400 and j.get("id"):
+                    print(f"\n  · 转一圈：{model}，{'首尾帧（照片同时作首帧和尾帧）' if both else '只有首帧（这个模型不支持尾帧）'}", flush=True)
+                    break
+                e = j.get("error") or {}
+                msg = f"{e.get('code', '')} {e.get('message', r.text[:300])}"
+                last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
+                print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
+                if r.status_code == 401:
+                    raise GenError("火山方舟 API Key 不对或已失效（401）。检查 .env 里的 ARK_API_KEY。", 401)
+                if "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
+                    closed.add(model)
+                    break  # 这个模型用不了，换下一个模型
+            else:
+                continue
             if r.status_code < 400 and j.get("id"):
                 break
-            e = j.get("error") or {}
-            msg = f"{e.get('code', '')} {e.get('message', r.text[:300])}"
-            last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
-            print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
-            if r.status_code == 401 or "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
-                break  # 这个模型用不了，换下一个模型
         else:
             continue
-        if r.status_code < 400 and j.get("id"):
-            break
+        break
     else:
         raise GenError(f"{last}。到火山方舟「开通管理」开通任意一个 Seedance 视频模型，"
                        "并把它的模型 ID 填到 .env 的 SEEDANCE_MODEL。" if last else "没有可用的 Seedance 模型。")
+    anchored = both
     tid = j["id"]
     t0 = time.time()
 
@@ -376,7 +394,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     url = (done.get("content") or {}).get("video_url")
     if not url:
         raise GenError(f"视频生成完了但没有返回视频地址：{json.dumps(done, ensure_ascii=False)[:300]}")
-    return url
+    return url, anchored
 
 
 async def ark_describe(client, image, category):

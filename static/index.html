@@ -589,7 +589,7 @@ function renderStage(){
   const pal=viewing&&!peek&&viewing.palette&&viewing.palette.length?viewing.palette:null;
   const hasVid=viewing&&viewing.video&&!peek&&!job;
   /* 照片、色卡、视频只在真的换了的时候才重画：生成中每秒刷新进度，不会让色卡一闪一闪 */
-  const key=JSON.stringify([list,frameBox(),pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
+  const key=JSON.stringify([list,frameBox(),pal&&pal.map(c=>c.hex),hasVid&&viewing.video+(viewing.video_at||"")]);
   if(key!==stageKey){
     stageKey=key;
     const fb=frameBox();
@@ -600,7 +600,7 @@ function renderStage(){
     if(pal)st.append(h('div',{class:'palette','data-k':pk,'aria-label':'这身的配色'},pal.map((c,n)=>h('div',{class:'pchip',style:`animation-delay:${n*70}ms`},
       h('div',{class:'swatch',style:`background:${c.hex}`}),h('div',{class:'lb'},c.hex,h('br'),c.zh,h('br'),h('span',{class:'en'},c.en))))));}
     if(hasVid){
-      const u='/media/results/'+viewing.video+'?t='+viewing.created;
+      const u='/media/results/'+viewing.video+'?t='+(viewing.video_at||viewing.created);
       const v=h('video',{class:'frame vid',src:u,muted:true,playsinline:true,preload:'auto'});
       v.muted=true;
       v.addEventListener('ended',endTurn);
@@ -632,6 +632,7 @@ function renderStage(){
     acts.append(b);
     acts.append(viewing.video?h('button',{onclick:()=>playTurn()},'转一圈'):
       h('button',{title:'生成一段原地转身一周的视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:makeTurn},'转一圈'));
+    if(viewing.video)acts.append(h('button',{title:'不满意，重新生成一段转身视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:()=>makeTurn(true)},'重转一次'));
     if(!viewing.demo)acts.append(h('button',{title:'哪里不对就只修哪里',onclick:fixSheet},'修一下'));
     if(viewing.history&&viewing.history.length)acts.append(h('button',{onclick:undoFix},'撤销修改'));
     acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
@@ -755,9 +756,12 @@ async function undoFix(){
   if(job||!viewing)return;
   try{viewing=await api(`/api/looks/${viewing.id}/undo`,{method:'POST'});await refresh()}catch(e){say(e.message)}
 }
-async function makeTurn(){
+async function makeTurn(force=false){
   if(job||!viewing)return;say('');playOnce=viewing.id;
-  try{await follow(await api(`/api/looks/${viewing.id}/turn`,{method:'POST'}))}catch(e){job=null;say(e.message);render()}
+  try{await follow(await api(`/api/looks/${viewing.id}/turn`+(force?'?force=1':''),{method:'POST'}));
+    if(viewing&&viewing.video&&viewing.turn_anchored===false)
+      say('你开通的视频模型不支持“尾帧”，这段视频只用照片当了开头，转回正面时脸可能会变。到火山方舟开通 Seedance 1.0 pro 或 1.0 lite（图生视频），再点“重转一次”。')}
+  catch(e){job=null;say(e.message);render()}
 }
 $('go').addEventListener('click',()=>generate(false));
 

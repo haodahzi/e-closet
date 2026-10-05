@@ -1012,11 +1012,11 @@ def turn_prompt():
 
 
 async def _video(client, job, image, prompt, label):
-    url = await P.seedance_turn(client, image, prompt, lambda s: job.update(step=f"{label}（通常 1–3 分钟）"))
+    url, anchored = await P.seedance_turn(client, image, prompt, lambda s: job.update(step=f"{label}（通常 1–3 分钟）"))
     job.update(step="下载视频")
     r = await client.get(url, follow_redirects=True, timeout=P.timeout(300))
     r.raise_for_status()
-    return r.content
+    return r.content, anchored
 
 
 async def run_turn(job, look_id):
@@ -1031,11 +1031,14 @@ async def run_turn(job, look_id):
         name = f"{look_id}_turn.mp4"
         out = RESULTS / name
         async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
-            out.write_bytes(await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频"))
+            data, anchored = await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频")
+            out.write_bytes(data)
         with _lock:
             db = db_load()
             if look_id in db["looks"]:
                 db["looks"][look_id]["video"] = name
+                db["looks"][look_id]["turn_anchored"] = anchored  # 照片有没有同时当尾帧（转回来脸更稳）
+                db["looks"][look_id]["video_at"] = time.time()  # 重转以后文件名不变，界面靠这个刷新缓存
                 db_save(db)
                 job.update(status="done", look=db["looks"][look_id])
             else:
@@ -1050,12 +1053,12 @@ async def run_turn(job, look_id):
 
 
 @app.post("/api/looks/{look_id}/turn")
-async def make_turn(look_id: str):
-    """给一套已生成的搭配做一段原地转身一周的视频。"""
+async def make_turn(look_id: str, force: bool = False):
+    """给一套已生成的搭配做一段原地转身一周的视频。force=1：不满意，重新生成一段（覆盖旧的）。"""
     lk = db_load()["looks"].get(look_id)
     if not lk:
         raise HTTPException(404, "这套搭配已经被删除。")
-    if lk.get("video") and (RESULTS / lk["video"]).exists():
+    if not force and lk.get("video") and (RESULTS / lk["video"]).exists():
         return {"cached": True, "look": lk}
     job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0, "steps": ["生成转身视频"]}
     JOBS[job["id"]] = job
