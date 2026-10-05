@@ -206,7 +206,7 @@ def ai_cutout(im: Image.Image, category):
     return out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height))), person
 
 
-def hang_fit(path, category):
+def hang_fit(path, category, own=False):
     """量一下透明底单品图，界面按这个把衣服对准衣架。
     衬衫：从上往下找到领口真正开始的地方（宽度突然变大），把上面露出来的衣架钩、人台头裁掉；
     再在肩部那一段找最宽处当肩宽。返回 肩宽/图宽、肩部中心、领口中心、高宽比。"""
@@ -225,6 +225,21 @@ def hang_fit(path, category):
     width = np.array([(r[1] - r[0]) if r else 0 for r in rows], dtype=float)
     if width.max() <= 0:
         return None
+    if own:  # AI 整理过、自带衣架的：不裁，挂钩位置取最上面那几行的中心
+        ys = [y for y in range(h) if rows[y]][:max(3, int(h * 0.03))]
+        hx = sum((rows[y][0] + rows[y][1]) / 2 for y in ys) / len(ys) / w
+        return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "v": 3}
+    # 自带衣架（你自己挂着拍的）：最上面是一截很细、居中的挂钩。
+    # 这种不裁、不画我们的衣架，直接把它自己的挂钩挂到衣杆上。
+    if category in ("shirt", "pants"):
+        y0 = int(np.argmax(width > 0))
+        thin = 0
+        while y0 + thin < h and 0 < width[y0 + thin] < 0.08 * width.max():
+            thin += 1
+        if thin >= 0.02 * h and rows[y0]:
+            hx = (rows[y0][0] + rows[y0][1]) / 2 / w
+            if 0.3 < hx < 0.7:
+                return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "v": 3}
     top = 0
     if category == "shirt":
         # 领口：宽度第一次超过最大宽度的 30%，并且之后几行都保持住（避开细的挂钩、人台脖子）
@@ -250,7 +265,7 @@ def hang_fit(path, category):
     l, r = rows[y_sh]
     t = rows[top] or rows[y_sh]
     return {"sw": round((r - l) / w, 3), "cx": round((l + r) / 2 / w, 3), "nx": round((t[0] + t[1]) / 2 / w, 3),
-            "ar": round(h / w, 3), "v": 2}
+            "ar": round(h / w, 3), "v": 3}
 
 
 def ensure_cut(it):
@@ -258,8 +273,8 @@ def ensure_cut(it):
     if it["category"] not in GARMENTS:
         return False
     if it.get("cutv") == CUT_VERSION:
-        if it.get("cut") and (it.get("fit") or {}).get("v") != 2 and (ITEMS / it["cut"]).exists():
-            it["fit"] = hang_fit(ITEMS / it["cut"], it["category"])
+        if it.get("cut") and (it.get("fit") or {}).get("v") != 3 and (ITEMS / it["cut"]).exists():
+            it["fit"] = hang_fit(ITEMS / it["cut"], it["category"], bool(it.get("hanger")))
             return True
         return False
     src = ITEMS / it["file"]
@@ -275,22 +290,23 @@ def ensure_cut(it):
     if out is not None:
         it["cut"] = f"{it['id']}_cut{CUT_VERSION}.png"
         out.save(ITEMS / it["cut"])
-        it["fit"] = hang_fit(ITEMS / it["cut"], it["category"])
+        it["fit"] = hang_fit(ITEMS / it["cut"], it["category"], bool(it.get("hanger")))
     return True
 
 
 def tidy_prompts(category, name):
     """整理成单品图：只要衣服本身，像挂在一个看不见的衣架上；不要模特、人台、假人、衣架。"""
+    hanger = category in ("shirt", "pants")
     nobody = ("Absolutely no person, no mannequin, no dress form, no ghost-mannequin neck, no body parts, "
-              "no hanger, no clip, no props, no text, no shadow box.")
+              + ("" if hanger else "no hanger, no clip, ") + "no props, no text, no shadow box.")
     keep = ("Keep its exact colour, fabric texture, pattern and stripe/check scale and spacing, collar, buttons, "
             "pockets, logos and details.")
     look = {
-        "shirt": "front view, as if hanging on an invisible hanger: collar standing and closed around an empty neck "
-                 "opening (inside back of the collar visible), shoulders gently sloped, sleeves hanging straight down "
-                 "beside the body, natural soft folds, hem straight",
-        "pants": "front view, hanging straight down from the waistband as if clipped at the waist, legs falling "
-                 "naturally side by side, waistband flat and level",
+        "shirt": "front view, hanging on a slim natural wooden hanger with a thin silver hook at the top centre: "
+                 "the shoulders rest on the hanger, collar standing around the empty neck opening, sleeves hanging "
+                 "straight down beside the body, natural soft folds, hem straight; the whole hanger and hook visible",
+        "pants": "front view, hanging from a wooden trouser hanger with two small clips holding the waistband and a "
+                 "thin silver hook at the top centre, legs falling naturally side by side",
         "shoes": "the pair side by side, three-quarter front view",
         "belt": "the belt laid out straight and flat, buckle at one end, front view",
         "hat": "three-quarter front view, sitting on nothing",
@@ -335,7 +351,8 @@ def clothes_prompts(pieces, wear):
     where = {"accessory": " (worn where it naturally belongs, at realistic scale)",
              "belt": " (threaded through the trouser belt loops at the waist, buckle centred and clearly visible)",
              "hat": " (worn on the head naturally, hair adjusted around it)"}
-    desc = lambda it: f" — {it['desc']}" if it.get("desc") else ""
+    desc = lambda it: (f" — {it['desc']}" if it.get("desc") else "") + \
+        (" (its photo shows it on a hanger; ignore the hanger)" if (it.get("fit") or {}).get("own") else "")
     refs = "; ".join(f"the {label(c, it)} from image {i + 2}{desc(it)}{where.get(c, '')}"
                      for i, (c, it) in enumerate(pieces))
     wear_txt = wear_text(wear) if any(c == "shirt" for c, _ in pieces) else ""
@@ -790,6 +807,7 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
             raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
         im.save(ITEMS / f"{item_id}_orig.jpg", quality=92)
         item["orig"] = f"{item_id}_orig.jpg"
+        item["hanger"] = category in ("shirt", "pants")
         try:
             async with httpx.AsyncClient(timeout=P.timeout()) as client:
                 im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
@@ -1038,16 +1056,16 @@ async def tidy_item(item_id: str):
         raise HTTPException(502, friendly(e))
     new_file = f"{item_id}_t{int(time.time())}.jpg"
     im.save(ITEMS / new_file, quality=92)
-    upd = {**it, "orig": orig, "file": new_file, "cutv": 0}
+    upd = {**it, "orig": orig, "file": new_file, "cutv": 0, "hanger": it["category"] in ("shirt", "pants")}
     await asyncio.to_thread(ensure_cut, upd)
     with _lock:
         db = db_load()
         cur = db["items"].get(item_id)
         if not cur:
             raise HTTPException(404, "这件单品已经被删除。")
-        for f in {cur["file"], cur.get("cut")} - {orig, None}:
+        for f in {cur["file"], cur.get("cut")} - {orig, None, upd["file"], upd.get("cut")}:
             (ITEMS / f).unlink(missing_ok=True)
-        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person", "fit")})
+        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person", "fit", "hanger")})
         db_save(db)
         return cur
 

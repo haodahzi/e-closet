@@ -63,6 +63,7 @@ button{cursor:pointer}
 /* 衣架在衣服后面：只露出挂钩，肩膀把衣架两头盖住 */
 .hook{position:absolute;left:50%;top:0;width:84px;margin-left:-42px;height:34px;z-index:0;pointer-events:none}
 .hang.pants .hook{width:100px;margin-left:-50px;height:40px}
+.ownhook .hook{width:100px;margin-left:-50px;height:40px;z-index:2}
 .g .pick{position:absolute;left:0;right:0;top:15px;bottom:0;border:0;background:none;padding:0;display:block;z-index:1}
 .g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;transform-origin:50% 0;
   filter:drop-shadow(0 14px 14px rgba(55,45,35,.16))}
@@ -263,6 +264,7 @@ const HANGER=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5
 const PANTS_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M50 17v8" stroke="#9d9d9d" stroke-width="2.2"/><rect x="10" y="24" width="80" height="6" rx="3" fill="#8A5A3B"/></svg>`;
 const S_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0M50 19c0 5-6 6-6 11a6 6 0 0 0 12 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+const HOOK_ONLY=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 24V18c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 const CLIPS=`<svg class="clips" viewBox="0 0 100 40"><rect x="18" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/><rect x="73" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/></svg>`;
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
@@ -359,7 +361,12 @@ async function tidy(i,btn){
 }
 /* 按肩宽缩放衬衫：肩膀正好压在衣架两臂上，挂钩从领口里出来 */
 function shirtFit(i){
-  const f=i.fit; if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
+  const f=i.fit;
+  if(f&&f.own&&i.cut){  /* 自带衣架：挂钩顶端碰到衣杆，挂钩在中间 */
+    const w=Math.min(200,300/f.ar), hh=w*f.ar;
+    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:20px;height:${hh.toFixed(1)}px;bottom:auto`;
+  }
+  if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
   const w=Math.max(130,Math.min(260,132/f.sw,300/f.ar)), hh=w*f.ar, nx=f.nx??f.cx;
   return `left:${(100-nx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:8px;height:${hh.toFixed(1)}px;bottom:auto`;
 }
@@ -368,11 +375,11 @@ function hangEl(i,n){
   const el=h('div',{class:`hang ${i.category}`+(isOn(i)?' on':''),'data-id':i.id,
       style:`--d:${-(n*1.37%5).toFixed(2)}s;--t:${(5.2+n*0.7%2.4).toFixed(2)}s`},
     h('span',{class:'mark'}),
-    h('div',{class:'sw'},h('div',{class:'g'},h('span',{html:i.category==='pants'?PANTS_HOOK:i.category==='belt'?S_HOOK:HANGER}),
+    h('div',{class:'sw'},h('div',{class:'g'},(i.fit&&i.fit.own)?h('span',{class:'ownhook',html:HOOK_ONLY}):h('span',{html:i.category==='pants'?PANTS_HOOK:i.category==='belt'?S_HOOK:HANGER}),
       h('button',{class:'pick','aria-pressed':String(isOn(i)),style:shirtFit(i),'aria-label':nameOf(i)+(isOn(i)?'（穿着）':''),
         onclick(){ if(!hoverable&&hovered!==i.id){setHover(i.id);return} ripple(i.id,.8);wearIt(i)},
         onfocus(){setHover(i.id)}},img),
-      i.category==='pants'?h('span',{html:CLIPS}):null)),
+      i.category==='pants'&&!(i.fit&&i.fit.own)?h('span',{html:CLIPS}):null)),
     h('div',{class:'tools'},S.config.demo?null:h('button',{class:'t',title:'用即梦整理成干净的白底单品图'+(S.config.tidy_cost?`，约 ¥${S.config.tidy_cost.toFixed(2)}`:''),onclick(e){tidy(i,e.currentTarget)}},'整理'),
       h('button',{class:'x','aria-label':'拿走',title:'拿走',onclick:()=>remove(i)},'×')));
   el.addEventListener('mouseenter',()=>setHover(i.id));
@@ -515,8 +522,8 @@ function renderFit(){
     $('pieces').replaceChildren(...(viewing.pieces||[]).map(p=>h('span',{class:'piece saved',title:'这件已经从衣橱拿走，只保存在这套搭配里'},
       h('img',{src:'/media/results/'+p.file,alt:''}),h('span',{},p.name||LABEL[p.category]))));
   }else $('pieces').replaceChildren(
-    chip('shirt',item(sel.shirt),drop('shirt')),chip('pants',item(sel.pants),drop('pants')),chip('belt',item(sel.belt),drop('belt')),
-    chip('shoes',item(sel.shoes),drop('shoes')),chip('hat',item(sel.hat),drop('hat')),
+    chip('shirt',item(sel.shirt),drop('shirt')),chip('pants',item(sel.pants),drop('pants')),...(sel.belt?[chip('belt',item(sel.belt),drop('belt'))]:[]),
+    chip('shoes',item(sel.shoes),drop('shoes')),...(sel.hat?[chip('hat',item(sel.hat),drop('hat'))]:[]),
     ...sel.accessories.map(id=>chip('accessory',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})));
   $('wear').hidden=!sel.shirt;
   document.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));

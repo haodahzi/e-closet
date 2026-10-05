@@ -293,26 +293,49 @@ async def seedream_views(client, images, prompt, n):
     return urls
 
 
+SEEDANCE_CANDIDATES = ["doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-260128",
+                       "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"]
+
+
 async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
-    """Seedance 首尾帧图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。"""
-    model = env("SEEDANCE_MODEL", "doubao-seedance-2-0-fast-260128")
+    """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。
+    模型按 .env 的 SEEDANCE_MODEL 优先，没开通就依次试候选；参数不被支持（比如 1.0 版不支持尾帧、
+    时长只能 5/10 秒、没有音频开关）就自动降级再提交。"""
     pic = small_uri(image)
-    body = {"model": model,
-            "content": [{"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": pic}, "role": "first_frame"},
-                        {"type": "image_url", "image_url": {"url": pic}, "role": "last_frame"}],
-            "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive",
-            "duration": int(env("VIDEO_SECONDS", "6")), "camera_fixed": True, "watermark": False,
-            "generate_audio": False}
     h = {"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"}
-    r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
-    if r.status_code in (401, 403):
-        raise GenError("火山方舟拒绝了 ARK_API_KEY，或者还没开通 Seedance 视频模型。", r.status_code)
-    j = r.json() if "json" in r.headers.get("content-type", "") else {}
-    if r.status_code >= 400 or "error" in j and j.get("error"):
-        e = j.get("error") or {}
-        raise GenError(f"视频任务提交失败（{r.status_code}）：{e.get('code', '')} {e.get('message', r.text[:300])}"
-                       "。确认已在火山方舟开通 Seedance 2.0，或在 .env 里改 SEEDANCE_MODEL。", r.status_code)
+    models = [m for m in dict.fromkeys([env("SEEDANCE_MODEL"), *SEEDANCE_CANDIDATES]) if m]
+    last = None
+    for model in models:
+        v2 = "seedance-2" in model
+        secs = int(env("VIDEO_SECONDS", "6" if v2 else "5"))
+        tries = [  # 从完整到最简：首尾帧 → 只首帧（提示词里要求最后回到正面）
+            {"frames": ["first_frame", "last_frame"], "extra": {"generate_audio": False} if v2 else {}, "secs": secs},
+            {"frames": ["first_frame", "last_frame"], "extra": {}, "secs": 5},
+            {"frames": ["first_frame"], "extra": {}, "secs": 5},
+        ]
+        for t in tries:
+            body = {"model": model,
+                    "content": [{"type": "text", "text": prompt}] +
+                               [{"type": "image_url", "image_url": {"url": pic}, "role": role} for role in t["frames"]],
+                    "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "duration": t["secs"],
+                    "camera_fixed": True, "watermark": False, **t["extra"]}
+            r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
+            j = r.json() if "json" in r.headers.get("content-type", "") else {}
+            if r.status_code < 400 and j.get("id"):
+                break
+            e = j.get("error") or {}
+            msg = f"{e.get('code', '')} {e.get('message', r.text[:300])}"
+            last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
+            print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
+            if r.status_code == 401 or "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
+                break  # 这个模型用不了，换下一个模型
+        else:
+            continue
+        if r.status_code < 400 and j.get("id"):
+            break
+    else:
+        raise GenError(f"{last}。到火山方舟「开通管理」开通任意一个 Seedance 视频模型，"
+                       "并把它的模型 ID 填到 .env 的 SEEDANCE_MODEL。" if last else "没有可用的 Seedance 模型。")
     tid = j["id"]
     t0 = time.time()
 
