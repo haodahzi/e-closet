@@ -128,7 +128,6 @@ button{cursor:pointer}
 .piece.none{color:var(--soft);background:none;border:1px dashed var(--line);cursor:pointer}
 .piece.none:hover{color:var(--ink);border-color:var(--ink)}
 .piece.has:hover{background:var(--tile-hi)}
-.piece.has:hover span::after{content:" · 脱下";color:var(--soft)}
 .fitrow{display:flex;gap:12px;align-items:center;margin-top:10px}
 .wear{display:flex;flex-wrap:wrap;gap:6px}
 .seg{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:2px;gap:2px}
@@ -754,7 +753,12 @@ function pointTo(cat){
   if(['shoes','hat','belt'].includes(cat)&&!of(cat).length)pickFiles(cat);
 }
 function renderFit(){
-  const chip=(cat,i,drop)=>i?h('button',{class:'piece has',title:'脱下',onclick:()=>{if(!job)drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i))):
+  /* 点一下就脱下：轻轻缩小淡出，不另外显示“脱下”两个字 */
+  const chip=(cat,i,drop)=>i?h('button',{class:'piece has','aria-label':nameOf(i)+'，点一下脱下',onclick(e){
+      if(job)return;curRing();const b=e.currentTarget;
+      if(b.animate&&!matchMedia('(prefers-reduced-motion:reduce)').matches)
+        b.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.82)'}],{duration:170,easing:'ease-in',fill:'forwards'}).onfinish=drop;
+      else drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i))):
     h('button',{class:'piece none',title:cat==='shoes'?'鞋子在衣杆下面的鞋架上':'在上面的衣杆上挑',onclick:()=>pointTo(cat)},h('i',{class:'ph'}),h('span',{},cat==='shirt'?'挑一件衬衫':cat==='shoes'||cat==='hat'?LABEL[cat]+' ↑ 鞋架':cat==='belt'?'腰带 ↑ 鞋架':LABEL[cat]));
   const drop=k=>()=>{sel[k]=null;viewing=null;keep();render()};
   const gone=viewing&&viewing.pieces?viewing.pieces.filter(p=>{const q=viewing.sel||{};
