@@ -44,8 +44,10 @@ button{cursor:pointer}
 .rod::before,.rod::after{content:"";position:absolute;top:-9px;width:16px;height:27px;border-radius:4px;
   background:linear-gradient(90deg,#d9d9d9,#f6f6f6 45%,#b9b9b9);box-shadow:0 2px 4px rgba(0,0,0,.18)}
 .rod::before{left:-8px}.rod::after{right:-8px}
-.rackadd{position:absolute;right:28px;top:2px;border:0;border-radius:999px;background:var(--card);padding:4px 13px;font-size:12px;color:var(--soft);box-shadow:0 1px 3px rgba(0,0,0,.06);z-index:2}
-.rackadd:hover{background:var(--ink);color:#fff}
+.railadd{position:relative;flex:0 0 96px;height:120px}
+.railadd .hook{width:20px;margin-left:-10px;height:36px;top:0}
+.railadd button{position:absolute;left:50%;top:27px;width:72px;height:72px;margin-left:-36px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
+.railadd button:hover{border-color:var(--ink);color:var(--ink)}
 /* 衣服只在衣杆两端支架之间挂：挂得多就互相挤，不会滑出去 */
 .rail{position:relative;display:flex;justify-content:center;align-items:flex-start;margin:0 46px;padding-bottom:16px;min-height:330px}
 .hang{position:relative;flex:0 1 58px;min-width:9px;height:312px;transition:flex-basis .6s var(--ease),flex-shrink .6s}
@@ -139,7 +141,7 @@ button{cursor:pointer}
 .lookwrap.l .looks{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px);mask-image:linear-gradient(90deg,transparent,#000 48px)}
 .lookwrap.r .looks{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent)}
 .lookwrap.l.r .looks{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
-.lookwrap .nav{position:absolute;top:50%;width:30px;height:30px;margin-top:-15px;border:0;border-radius:50%;background:rgba(255,255,255,.95);
+.lookwrap .nav{position:absolute;z-index:5;top:50%;width:30px;height:30px;margin-top:-15px;border:0;border-radius:50%;background:rgba(255,255,255,.95);
   box-shadow:0 2px 8px rgba(0,0,0,.12);color:var(--ink);font-size:15px;line-height:30px;padding:0;opacity:0;pointer-events:none;transition:opacity .2s}
 .lookwrap .nav.prev{left:-6px}.lookwrap .nav.next{right:-6px}
 .lookcard:hover .lookwrap.l .nav.prev,.lookcard:hover .lookwrap.r .nav.next{opacity:1;pointer-events:auto}
@@ -154,14 +156,11 @@ button{cursor:pointer}
 /* ---------- 镜子 ---------- */
 .mirrorcol{min-width:0;display:flex}
 .mirrorcol .stage{aspect-ratio:auto;height:100%;flex:1}
-.stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#F7F6F3;perspective:1400px;touch-action:pan-y;user-select:none;transition:background-color .6s}
+.stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#FFFFFF;perspective:1400px;touch-action:pan-y;user-select:none}
 .model{position:absolute;inset:7% 9% 9%;transform-style:preserve-3d;transition:transform .8s var(--ease)}
 .breathe{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
 .frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
-/* 照片四边淡出到背景色：看不到照片的边框 */
-.frame.soft{-webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 7%,#000 95%,transparent);
-  -webkit-mask-composite:source-in;mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 7%,#000 95%,transparent);mask-composite:intersect}
 .frame.show{opacity:1}
 /* 色卡：仿色卡样式，浮在照片左侧，不挤占人像的位置 */
 .palette{position:absolute;left:5%;top:9%;width:15%;min-width:60px;max-width:92px;display:flex;flex-direction:column;gap:10px;z-index:2;pointer-events:none}
@@ -241,7 +240,6 @@ button{cursor:pointer}
   <section class="closet" aria-label="衣橱">
     <div class="rack">
       <div class="rod"></div>
-      <button class="rackadd" id="rackadd">+ 挂一件</button>
       <div class="rail" id="rail"></div>
       <div class="caption" id="caption" aria-live="polite"></div>
     </div>
@@ -435,10 +433,10 @@ function renderRail(){
   railKey=key;
   rail.replaceChildren(...list.map(hangEl));
   rail.onmouseleave=()=>setHover(null);
-  if(!list.length)rail.append(h('div',{class:'railempty'},'衣杆还空着，点右上角“+ 挂一件”挂上你的衬衫和裤子'));
+  rail.append(h('div',{class:'railadd'},h('span',{html:HOOK_ONLY}),h('button',{title:'挂一件衬衫或裤子','aria-label':'挂一件',onclick:()=>pickFiles('shirt')},'+')));
+  if(!list.length)rail.append(h('div',{class:'railempty'},'衣杆还空着，点右边的“+”挂上你的衬衫和裤子'));
   const keepFront=hovered&&item(hovered)?hovered:null;hovered=null;setHover(keepFront);
 }
-$('rackadd').addEventListener('click',()=>pickFiles('shirt'));
 /* Looks 用滚轮也能左右滑 */
 const lookEdges=()=>{const l=$('looks'),w=$('lookwrap');w.classList.toggle('l',l.scrollLeft>4);w.classList.toggle('r',l.scrollLeft+l.clientWidth<l.scrollWidth-4)};
 $('looks').addEventListener('scroll',lookEdges,{passive:true});addEventListener('resize',lookEdges);
@@ -530,15 +528,14 @@ function renderStage(){
   const key=JSON.stringify([list,pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
   if(key!==stageKey){
     stageKey=key;
-    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame soft'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
-    matchBackdrop();
+    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
     const pk=pal?pal.map(c=>c.hex).join():'', old=st.querySelector('.palette');
     if(!old||old.dataset.k!==pk){if(old)old.remove();
     if(pal)st.append(h('div',{class:'palette','data-k':pk,'aria-label':'这身的配色'},pal.map((c,n)=>h('div',{class:'pchip',style:`animation-delay:${n*70}ms`},
       h('div',{class:'swatch',style:`background:${c.hex}`}),h('div',{class:'lb'},c.hex,h('br'),c.zh,h('br'),h('span',{class:'en'},c.en))))));}
     if(hasVid){
       const u='/media/results/'+viewing.video+'?t='+viewing.created;
-      const v=h('video',{class:'frame vid soft',src:u,muted:true,playsinline:true,preload:'auto'});
+      const v=h('video',{class:'frame vid',src:u,muted:true,playsinline:true,preload:'auto'});
       v.muted=true;
       v.addEventListener('ended',endTurn);
       v.addEventListener('timeupdate',()=>{if(!dragging&&!v.paused&&v.currentTime>=turnEnd(v))endTurn()});
@@ -572,19 +569,6 @@ function renderStage(){
   }
   if(hasVid)st.append(h('div',{class:'turnhint'},hoverable?'左右拖动看转身，松手转回正面':'左右滑动看转身'));
   if(job)st.append(h('div',{class:'busy'},h('i'),(job.step||'生成中')+` · ${Math.round((Date.now()-jobStart)/1000)} 秒`));
-}
-function matchBackdrop(){  /* 背景取照片靠边一圈的颜色（取中位数，不受影子和人影响），再加上照片四边淡出，照片和背景连成一片 */
-  const f=$('frames').querySelector('img'), st=$('stage');
-  if(!f){st.style.backgroundColor='';return}
-  const go=()=>{try{
-    const c=document.createElement('canvas');c.width=40;c.height=54;const x=c.getContext('2d',{willReadFrequently:true});
-    x.drawImage(f,0,0,40,54);const d=x.getImageData(0,0,40,54).data, R=[],G=[],B=[];
-    for(let y=0;y<54;y++)for(let X=0;X<40;X++){
-      if(!((X>=2&&X<=4)||(X>=35&&X<=37)||(y>=2&&y<=4&&X>4&&X<35)))continue;  /* 离边缘一点点的一圈：避开最边上的暗角 */const k=(y*40+X)*4;R.push(d[k]);G.push(d[k+1]);B.push(d[k+2])}
-    const med=a=>a.sort((p,q)=>p-q)[a.length>>1];
-    st.style.backgroundColor=`rgb(${med(R)},${med(G)},${med(B)})`;
-  }catch(e){}};
-  f.complete&&f.naturalWidth?go():f.addEventListener('load',go,{once:true});
 }
 /* 有转身视频时，左右拖动就是在视频里来回转；松手后接着转完、回到正面 */
 let dragging=false, dragX=0, dragT=0;

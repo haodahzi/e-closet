@@ -342,8 +342,36 @@ WEAR_EN = {
     "collar": {"closed": "The shirt is buttoned all the way up to the collar.",
                "open": "The top shirt button is undone, collar open, no tie."},
 }
-WHITE = ("Background: a pure white seamless studio backdrop (#FFFFFF) filling the whole frame, soft even light, "
+WHITE = ("Background: a pure white seamless studio backdrop, exactly #FFFFFF, filling the whole frame edge to edge; "
+         "no grey gradient, no vignette, no visible floor line or horizon, no texture; soft even light, "
          "only a faint natural shadow under the feet; nothing else in the background.")
+
+
+def whiten_bg(im):
+    """把生成图里接近白色、并且和画面边缘连在一起的背景统一成纯白 #FFFFFF。
+    模型说是白底，实际常常带一点灰或暗角；页面背景是固定的纯白，这样照片和背景就没有分界线。
+    人身上的白衬衫不和边缘相连的部分、脚下的影子（不够白）都不动。"""
+    try:
+        import numpy as np
+    except Exception:
+        return im
+    im = im.convert("RGB")
+    a = np.asarray(im).astype(np.int16)
+    lo, hi = a.min(axis=2), a.max(axis=2)
+    near = ((lo > 222) & (hi - lo < 16)).astype(np.uint8) * 255
+    full = Image.fromarray(near, "L")
+    k = max(1, max(full.size) // 512)  # 在小图上找“和边缘连着的”区域，再放大回原图，快很多
+    m = full.resize((full.width // k, full.height // k), Image.NEAREST).copy()  # copy：直接从数组来的图改不动
+    w, h = m.size
+    for x, y in [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]:
+        if m.getpixel((x, y)) == 255:
+            ImageDraw.floodfill(m, (x, y), 128)
+    edge = np.asarray(m.point(lambda v: 255 if v == 128 else 0).resize(full.size, Image.NEAREST)
+                      .filter(ImageFilter.MaxFilter(2 * k + 1))) > 0
+    bg = Image.fromarray(((edge & (near > 0)) * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(1.5))
+    return Image.composite(Image.new("RGB", im.size, (255, 255, 255)), im, bg)
+
+
 KEEP = ("Keep the person's face, hair, skin tone, body shape, pose and camera framing exactly as in image 1. " + WHITE)
 
 
@@ -770,7 +798,7 @@ async def run_job(job, req: TryOn, plan):
                         if total(r2) >= total(qa):
                             best, qa = fixed, r2
                         break
-        im = best
+        im = whiten_bg(best)
         job.update(step="保存结果")
         look_id = uuid.uuid4().hex[:12]
         im.save(RESULTS / f"{look_id}.jpg", quality=95)
@@ -929,7 +957,7 @@ def turn_prompt():
     TURN_MODE=orbit：人完全不动，镜头环绕人物一圈（环绕运镜），有些模型这样更不容易变形。"""
     keep = ("人物全程保持同一个站姿，像静止的雕塑：手臂、手、腿、脚、头和表情都完全不动，不迈步、不摆手、不扭腰、不转头，"
             "身体比例和五官不变形；服装的颜色、条纹格纹、版型、塞法和配饰全程保持一致，布料只随旋转轻微自然摆动。"
-            "纯白无缝影棚背景（#FFFFFF），柔和均匀的光线，人物全身始终完整在画面中央，脚下只有淡淡的自然阴影。"
+            "纯白无缝影棚背景（严格的 #FFFFFF，全程不变，没有灰色渐变、暗角和地平线），柔和均匀的光线，人物全身始终完整在画面中央，脚下只有淡淡的自然阴影。"
             "不切镜头、不推拉变焦、不出现其他人物或文字。")
     if P.env("TURN_MODE", "turntable") == "orbit":
         return ("360度环绕运镜（orbit shot）：画面中的人物完全静止不动，相机以人物为圆心、保持同样的高度和距离，"
@@ -1001,7 +1029,7 @@ async def run_fix(job, look_id, fix: Fix):
             raise P.GenError("没说要修哪里。勾选不对的部分，或者写一句哪里不对。")
         job.update(step="修正" + "、".join(PART_ZH.get(x, x) for x in fix.parts) if fix.parts else "按说明修正")
         async with httpx.AsyncClient(timeout=P.timeout()) as client:
-            im = await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts))
+            im = whiten_bg(await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts)))
         name = f"{look_id}_f{int(time.time())}.jpg"
         im.save(RESULTS / name, quality=95)
         with _lock:
