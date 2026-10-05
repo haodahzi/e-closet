@@ -262,7 +262,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 <div class="room">
   <section class="closet" aria-label="衣橱">
     <div class="rack">
-      <button class="tidybtn" id="tidybtn" aria-pressed="false" title="改名、整理、拿走，拖动换位置">整理衣柜</button>
+      <button class="tidybtn" id="tidybtn" aria-pressed="false" title="改名、拿走，拖动换位置">整理衣柜</button>
       <div class="rod"></div>
       <div class="rail" id="rail"></div>
       <div class="caption" id="caption" aria-live="polite"></div>
@@ -392,11 +392,10 @@ function tidyCaption(){
   const i=picked&&item(picked), hv=!i&&hovered&&item(hovered);
   if(i){
     const tb=h('div',{class:'tb'},h('button',{onclick:()=>renameSheet(i)},'改名'),
-      onRail(i.id)&&!S.config.demo?h('button',{title:'用即梦整理成干净的白底单品图'+(S.config.tidy_cost?`，约 ¥${S.config.tidy_cost.toFixed(2)}`:''),onclick:e=>tidy(i,e.currentTarget)},'整理'):null,
       h('button',{class:'del',onclick:()=>remove(i)},'拿走'));
     $('caption').replaceChildren(h('b',{},nameOf(i)),tb);
   }else if(hv)$('caption').replaceChildren(h('b',{},nameOf(hv)),h('span',{},'点一下选中 · 按住拖动换位置'));
-  else $('caption').replaceChildren(h('span',{},'点一件选中，再改名、整理或拿走；按住拖动可以换位置'));
+  else $('caption').replaceChildren(h('span',{},'点一件选中，再改名或拿走；按住拖动可以换位置'));
 }
 $('tidybtn').addEventListener('click',()=>setTidy(!tidyMode));
 addEventListener('keydown',e=>{if(e.key==='Escape'&&tidyMode&&!$('layer').children.length)setTidy(false)});
@@ -439,7 +438,7 @@ function caption(){
   if(tidyMode){tidyCaption();return}
   if(beltNote){beltNote=false;$('caption').replaceChildren(h('b',{},'系上腰带'),h('span',{},'已改成“塞进裤子”，腰带才露得出来；想放在外面可以再改回来'));return}
   const f=frontId()?item(frontId()):hovered&&item(hovered)?item(hovered):null;
-  $('caption').replaceChildren(...(f?[h('b',{},nameOf(f)),h('span',{},(isOn(f)?'穿着 · 点一下脱下':'点一下穿上')+(f.person?' · 照片里有人，点“整理”变成干净单品图':''))]:
+  $('caption').replaceChildren(...(f?[h('b',{},nameOf(f)),h('span',{},isOn(f)?'穿着 · 点一下脱下':'点一下穿上')]:
     of('shirt').length+of('pants').length?[h('span',{},hoverable?'鼠标划过衣服看正面，点一下穿上':'点一下看正面，再点一下穿上')]:[]));
 }
 /* 衣服被拨开时的摆动：离得越近摆得越大，像真的衣杆上一排衣服被挤了一下 */
@@ -483,11 +482,6 @@ function renameSheet(i){
       i.category==='accessory'?h('p',{class:'muted'},'写清楚是什么（项链、耳环、手表、包…），换装时模型靠名字决定戴在哪。'):null,
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'保存')))));
   name.focus();name.select();
-}
-async function tidy(i,btn){
-  btn.disabled=true;btn.textContent='整理中…';say('');
-  $('caption').replaceChildren(h('span',{},'正在用即梦整理这件衣服，通常要 20–60 秒…'));
-  try{await api(`/api/items/${i.id}/tidy`,{method:'POST'});await refresh()}catch(e){say(e.message);btn.disabled=false;btn.textContent='整理'}
 }
 /* 按肩宽缩放衬衫：肩膀正好压在衣架两臂上，挂钩从领口里出来 */
 function shirtFit(i){

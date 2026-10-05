@@ -1199,43 +1199,6 @@ def _jpeg(im):
     return buf.getvalue()
 
 
-@app.post("/api/items/{item_id}/tidy")
-async def tidy_item(item_id: str):
-    """把已有单品（模特图、背景乱的图）整理成干净的白底单品图，原图保留。"""
-    it = db_load()["items"].get(item_id)
-    if not it or it["category"] not in GARMENTS:
-        raise HTTPException(404, "这件单品已经被删除。")
-    if MOCK:
-        raise HTTPException(400, "演示模式不会真的整理。在 .env 里填好 ARK_API_KEY 后再试。")
-    if not P.ready(EDITOR):
-        raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
-    orig = it.get("orig") or it["file"]
-    try:
-        async with httpx.AsyncClient(timeout=P.timeout()) as client:
-            im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
-                client, [ITEMS / orig], tidy_prompts(it["category"], it.get("name", ""))))))
-    except P.GenError as e:
-        log_error("tidy_item", e)
-        raise HTTPException(502, str(e))
-    except Exception as e:
-        log_error("tidy_item", e)
-        raise HTTPException(502, friendly(e))
-    new_file = f"{item_id}_t{int(time.time())}.jpg"
-    im.save(ITEMS / new_file, quality=92)
-    upd = {**it, "orig": orig, "file": new_file, "cutv": 0, "hanger": it["category"] in ("shirt", "pants")}
-    await asyncio.to_thread(ensure_cut, upd)
-    with _lock:
-        db = db_load()
-        cur = db["items"].get(item_id)
-        if not cur:
-            raise HTTPException(404, "这件单品已经被删除。")
-        for f in {cur["file"], cur.get("cut")} - {orig, None, upd["file"], upd.get("cut")}:
-            (ITEMS / f).unlink(missing_ok=True)
-        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person", "fit", "hanger")})
-        db_save(db)
-        return cur
-
-
 @app.post("/api/plan")
 def preview_plan(req: TryOn):
     """界面上显示要走哪几步、大概多少钱、是否已经生成过。"""
