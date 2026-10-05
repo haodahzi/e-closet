@@ -331,7 +331,30 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     return url
 
 
-CHECKS = ("same_person", "shirt_match", "outfit_complete", "natural", "wear_correct")
+async def ark_describe(client, image, category):
+    """看图写一句英文描述（颜色、材质、关键细节），生成时和图一起交给即梦，鞋子等小件更不容易画错。"""
+    kind = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat"}.get(
+        category, "accessory")
+    try:
+        r = await client.post(f"{ARK}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
+                                                                 "Content-Type": "application/json"},
+                              json={"model": env("CHECK_MODEL", "doubao-seed-1-6-250615"), "temperature": 0,
+                                    "messages": [{"role": "user", "content": [
+                                        {"type": "text", "text": f"Describe this {kind} for a fashion catalogue in one "
+                                         "English phrase of at most 22 words: type, exact colours, material, pattern, "
+                                         "and the 2-3 most distinctive details (laces, sole, buckle, logo, collar...). "
+                                         "Only the phrase."},
+                                        {"type": "image_url", "image_url": {"url": small_uri(image, 768)}}]}]})
+        text = r.json()["choices"][0]["message"]["content"].strip().strip('"').split("\n")[0]
+        return text[:200] or None
+    except Exception as e:
+        print(f"\n  · 单品描述没写成（不影响使用）：{type(e).__name__}: {e}", flush=True)
+        return None
+
+
+CHECKS = ("same_person", "shirt_match", "outfit_complete", "natural", "wear_correct",
+          "shoes_match", "belt_match", "hat_match", "accessories_match")
+FIXABLE = {"shoes_match": "shoes", "belt_match": "belt", "hat_match": "hat", "accessories_match": "accessory"}
 
 
 async def ark_judge(client, refs, result, wear_txt):
@@ -347,6 +370,10 @@ async def ark_judge(client, refs, result, wear_txt):
         '"outfit_complete": bool (every referenced item is worn, in the right place and at a natural scale), '
         '"natural": bool (pose, background and lighting match image 1; no collage look, no extra limbs or artefacts), '
         f'"wear_correct": bool (the shirt is worn as requested: {wear_txt or "no specific request"}), '
+        '"shoes_match": bool (the shoes have the same type, colours, laces and sole as the shoes reference; true if none), '
+        '"belt_match": bool (a belt like the belt reference is visibly worn at the waist; true if no belt reference), '
+        '"hat_match": bool (the hat matches the hat reference; true if no hat reference), '
+        '"accessories_match": bool (other referenced accessories are present and look the same; true if none), '
         '"note": "the main problem in under 15 words, or empty"}')}]
     content += [{"type": "image_url", "image_url": {"url": small_uri(p, 768)}} for _, p in refs]
     content += [{"type": "image_url", "image_url": {"url": result}}]
@@ -357,7 +384,7 @@ async def ark_judge(client, refs, result, wear_txt):
                                     "messages": [{"role": "user", "content": content}]})
         text = r.json()["choices"][0]["message"]["content"]
         j = json.loads(text[text.index("{"):text.rindex("}") + 1])
-        return {k: bool(j.get(k)) for k in CHECKS} | {"note": str(j.get("note", ""))[:120]}
+        return {k: bool(j.get(k, True)) for k in CHECKS} | {"note": str(j.get("note", ""))[:120]}
     except Exception as e:
         body = ""
         try:
