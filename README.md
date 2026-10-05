@@ -48,6 +48,14 @@ python app.py
 | `kling` | 可灵试穿分两次换；塞进 = 先衬衫后裤子，放外面 = 先裤子后衬衫 | 同上（需要百炼 key） |
 | `fal` | Nano Banana Pro 一次换全身（原方案） | 同一个模型 |
 
+## 出问题了先跑诊断
+
+```bash
+python check.py            # 免费：测网络、key、模型开通
+python check.py --image    # 再真的生成一张测试图（约 ¥0.2）
+```
+出错的详细原因也会打印在运行 `python app.py` 的终端里，并记在 `data/errors.log`。
+
 ## 自动检查效果
 
 用即梦时，每张图生成后会在后台用豆包视觉模型（同一个 `ARK_API_KEY`）对照原照和单品图检查五项：像本人、衬衫还原、整身完整、画面自然、穿法正确。

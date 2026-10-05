@@ -337,6 +337,7 @@ function setHover(id){
 }
 async function tidy(i,btn){
   btn.disabled=true;btn.textContent='整理中…';say('');
+  $('caption').replaceChildren(h('span',{},'正在用即梦整理这件衣服，通常要 20–60 秒…'));
   try{await api(`/api/items/${i.id}/tidy`,{method:'POST'});await refresh()}catch(e){say(e.message);btn.disabled=false;btn.textContent='整理'}
 }
 function hangEl(i,n){
@@ -423,7 +424,7 @@ function renderStage(){
     st.append(h('div',{class:'turnhint'},hoverable?'左右拖动转身':'左右滑动转身'));
     turnTimer=setInterval(()=>{if(!dragging)show(frameIdx+1)},900);
   }
-  if(job)st.append(h('div',{class:'busy'},h('i'),job.step||'生成中'));
+  if(job)st.append(h('div',{class:'busy'},h('i'),(job.step||'生成中')+` · ${Math.round((Date.now()-jobStart)/1000)} 秒`));
 }
 function matchBackdrop(){  /* 背景取照片边缘的颜色，让人像和背景连成一片 */
   const f=$('frames').querySelector('img'), st=$('stage');
@@ -503,9 +504,10 @@ function renderLooks(){
 }
 
 /* ---------- 生成 ---------- */
+let jobStart=0;
 async function follow(r){
   if(r.cached){viewing=r.look;render();return}
-  job=r.job;render();
+  job=r.job;jobStart=Date.now();render();
   while(job.status==='running'){
     await new Promise(ok=>setTimeout(ok,900));
     job=await api('/api/jobs/'+job.id);renderStage();

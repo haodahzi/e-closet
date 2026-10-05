@@ -80,9 +80,9 @@ def log_error(where, e):
 
 def friendly(e):
     if isinstance(e, (httpx.ConnectError, httpx.ProxyError, httpx.ConnectTimeout)):
-        return "连不上模型服务（网络问题）。检查网络，开着代理的话试试关掉再生成。"
+        return "连不上即梦（火山方舟）的服务器。检查网络；开着 VPN/代理的话先关掉再试。可以运行 python check.py 诊断。"
     if isinstance(e, httpx.TimeoutException):
-        return "模型那边太久没响应，已放弃。稍后再试一次。"
+        return "即梦那边太久没出图，已放弃。稍后再试一次；一直这样的话运行 python check.py 诊断。"
     return f"生成中断：{type(e).__name__}: {e}"
 
 
@@ -491,7 +491,7 @@ async def run_job(job, req: TryOn, plan):
         checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
         wear = wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) if req.shirt_id else ""
         best, qa = None, None
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=P.timeout()) as client:
             for attempt in range(TRIES if checking else 1):
                 im = await execute(plan, client, lambda i, s: job.update(
                     step_index=i, step=s["label"] if attempt == 0 else "效果不理想，重新生成"))
@@ -576,12 +576,15 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
         im.save(ITEMS / f"{item_id}_orig.jpg", quality=92)
         item["orig"] = f"{item_id}_orig.jpg"
         try:
-            async with httpx.AsyncClient(timeout=180) as client:
+            async with httpx.AsyncClient(timeout=P.timeout()) as client:
                 im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
                     client, [ITEMS / item["orig"]], tidy_prompts(category, item["name"])))))
         except P.GenError as e:
             log_error("add_item", e)
             raise HTTPException(502, str(e))
+        except Exception as e:
+            log_error("add_item", e)
+            raise HTTPException(502, friendly(e))
     im.save(ITEMS / item["file"], quality=92)
     await asyncio.to_thread(ensure_cut, item)
     with _lock:
@@ -655,7 +658,7 @@ async def run_turn(job, look_id):
             shirt = db_load()["items"].get((lk.get("sel") or {}).get("shirt_id") or "")
             if shirt:
                 refs.append(ITEMS / shirt["file"])
-            async with httpx.AsyncClient(timeout=600) as client:
+            async with httpx.AsyncClient(timeout=P.timeout(600)) as client:
                 urls = await P.seedream_views(client, refs, turn_prompt(), TURN_VIEWS)
                 frames = [await fetch_image(client, u) for u in urls]
         names = []
@@ -720,11 +723,14 @@ async def make_portrait(item_id: str):
         if not P.ready(EDITOR):
             raise HTTPException(400, f"生成形象照要用{P.NAMES[EDITOR]}的图像编辑，.env 里还没填它的 key。")
         try:
-            async with httpx.AsyncClient(timeout=180) as client:
+            async with httpx.AsyncClient(timeout=P.timeout()) as client:
                 im = await fetch_image(client, await P.EDIT[EDITOR](client, [src], portrait_prompts()))
         except P.GenError as e:
             log_error("make_portrait", e)
             raise HTTPException(502, str(e))
+        except Exception as e:
+            log_error("make_portrait", e)
+            raise HTTPException(502, friendly(e))
     new_id = uuid.uuid4().hex[:12]
     normalize_image(_jpeg(im)).save(ITEMS / f"{new_id}.jpg", quality=92)
     item = {"id": new_id, "category": "person", "name": "形象照" + (f"（{it['name']}）" if it.get("name") else ""),
@@ -754,12 +760,15 @@ async def tidy_item(item_id: str):
         raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
     orig = it.get("orig") or it["file"]
     try:
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=P.timeout()) as client:
             im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
                 client, [ITEMS / orig], tidy_prompts(it["category"], it.get("name", ""))))))
     except P.GenError as e:
         log_error("tidy_item", e)
         raise HTTPException(502, str(e))
+    except Exception as e:
+        log_error("tidy_item", e)
+        raise HTTPException(502, friendly(e))
     new_file = f"{item_id}_t{int(time.time())}.jpg"
     im.save(ITEMS / new_file, quality=92)
     upd = {**it, "orig": orig, "file": new_file, "cutv": 0}

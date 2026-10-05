@@ -28,6 +28,24 @@ def b64(p: Path):
     return base64.b64encode(p.read_bytes()).decode()
 
 
+def small_uri(x, side=1280):
+    """发给即梦的图先缩到长边 1280、JPEG 85，请求小很多、上传更快（结果清晰度不受影响）。"""
+    if not isinstance(x, Path):
+        return x
+    from PIL import Image
+    import io
+    im = Image.open(x).convert("RGB")
+    im.thumbnail((side, side))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def timeout(read=180):
+    """连不上 15 秒就放弃；连上以后最多等 read 秒出图。"""
+    return httpx.Timeout(connect=15, read=read, write=60, pool=15)
+
+
 def data_uri(x):
     return "data:image/jpeg;base64," + b64(x) if isinstance(x, Path) else x
 
@@ -231,7 +249,7 @@ async def seedream_edit(client, images, prompts):
     last = None
     for p in prompts:
         body = {"model": env("SEEDREAM_MODEL", "doubao-seedream-4-5-251128"), "prompt": p,
-                "image": [data_uri(x) for x in images], "size": ark_size(images[0]),
+                "image": [small_uri(x) for x in images], "size": ark_size(images[0]),
                 "sequential_image_generation": "disabled", "response_format": "url", "watermark": False}
         try:
             r = await client.post(f"{ARK}/images/generations", json=body,
@@ -258,7 +276,7 @@ async def seedream_edit(client, images, prompts):
 async def seedream_views(client, images, prompt, n):
     """Seedream 组图：一次生成 n 张同一人同一身的不同角度，用来做“转一圈”。"""
     body = {"model": env("SEEDREAM_MODEL", "doubao-seedream-4-5-251128"), "prompt": prompt,
-            "image": [data_uri(x) for x in images], "size": ark_size(images[0]),
+            "image": [small_uri(x) for x in images], "size": ark_size(images[0]),
             "sequential_image_generation": "auto", "sequential_image_generation_options": {"max_images": n},
             "response_format": "url", "watermark": False}
     r = await client.post(f"{ARK}/images/generations", json=body, timeout=600,
@@ -292,7 +310,7 @@ async def ark_judge(client, refs, result, wear_txt):
         '"natural": bool (pose, background and lighting match image 1; no collage look, no extra limbs or artefacts), '
         f'"wear_correct": bool (the shirt is worn as requested: {wear_txt or "no specific request"}), '
         '"note": "the main problem in under 15 words, or empty"}')}]
-    content += [{"type": "image_url", "image_url": {"url": data_uri(p)}} for _, p in refs]
+    content += [{"type": "image_url", "image_url": {"url": small_uri(p, 768)}} for _, p in refs]
     content += [{"type": "image_url", "image_url": {"url": result}}]
     try:
         r = await client.post(f"{ARK}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
