@@ -230,10 +230,16 @@ def hang_fit(path, category, own=False):
     if width.max() <= 0:
         return None
     fill = round(float(a.mean()), 3)  # 实心部分占整张图多少，鞋架上按这个把大小调一致
-    if own:  # AI 整理过、自带衣架的：不裁，挂钩位置取最上面那几行的中心
-        ys = [y for y in range(h) if rows[y]][:max(3, int(h * 0.03))]
+    if own:  # AI 整理过、自带衣架的：保留木衣架；它自己的挂钩（如果有）裁掉，统一用界面画的挂钩
+        y0 = int(np.argmax(width > 0))
+        # 挂钩：最上面一段宽度都不到衣服最大宽度 13% 的部分（钩子的圈也很窄），整段裁掉，从衣架顶端开始
+        bar = int(np.argmax(width >= 0.13 * width.max()))
+        if bar - y0 >= 0.02 * h:
+            im.crop((0, max(bar - 1, 0), w, h)).save(path)
+            return hang_fit(path, category, own=True)
+        ys = [y for y in range(h) if rows[y]][:max(3, int(h * 0.02))]
         hx = sum((rows[y][0] + rows[y][1]) / 2 for y in ys) / len(ys) / w
-        return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "fill": fill, "v": 4}
+        return {"own": True, "hx": round(hx, 3), "ty": round(y0 / h, 4), "ar": round(h / w, 3), "fill": fill, "v": 7}
     # 自带衣架（你自己挂着拍的）：最上面是一截很细、居中的挂钩。
     # 这种不裁、不画我们的衣架，直接把它自己的挂钩挂到衣杆上。
     if category in ("shirt", "pants"):
@@ -278,7 +284,7 @@ def ensure_cut(it):
     if it["category"] not in GARMENTS:
         return False
     if it.get("cutv") == CUT_VERSION:
-        if it.get("cut") and (it.get("fit") or {}).get("v") != 4 and (ITEMS / it["cut"]).exists():
+        if it.get("cut") and (it.get("fit") or {}).get("v") not in (4, 7) or (it.get("hanger") and (it.get("fit") or {}).get("v") != 7) and (ITEMS / it["cut"]).exists():
             it["fit"] = hang_fit(ITEMS / it["cut"], it["category"], bool(it.get("hanger")))
             return True
         return False

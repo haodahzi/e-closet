@@ -34,7 +34,7 @@ button{cursor:pointer}
 .demo{font-size:12px;color:var(--soft);display:inline-flex;align-items:center;gap:7px}
 .demo::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
 
-.room{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(300px,1fr);gap:28px;padding:6px 32px 28px;align-items:stretch}
+.room{display:grid;grid-template-columns:minmax(0,2.5fr) minmax(280px,.85fr);gap:28px;padding:6px 32px 28px;align-items:stretch}
 .closet{min-width:0;display:flex;flex-direction:column;gap:14px}
 
 /* ---------- 衣杆 ---------- */
@@ -63,7 +63,7 @@ button{cursor:pointer}
 /* 衣架在衣服后面：只露出挂钩，肩膀把衣架两头盖住 */
 .hook{position:absolute;left:50%;top:0;width:84px;margin-left:-42px;height:34px;z-index:0;pointer-events:none}
 .hang.pants .hook{width:100px;margin-left:-50px;height:40px}
-.ownhook .hook{width:100px;margin-left:-50px;height:40px;z-index:2}
+.ownhook .hook{width:28px;margin-left:-14px;height:50px;top:-8px;z-index:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
 .g .pick{position:absolute;left:0;right:0;top:15px;bottom:0;border:0;background:none;padding:0;display:block;z-index:1}
 .g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;transform-origin:50% 0;
   filter:drop-shadow(0 14px 14px rgba(55,45,35,.16))}
@@ -129,7 +129,17 @@ button{cursor:pointer}
 .cost{margin:0;font-size:11px;color:var(--soft);text-align:center;min-height:16px}
 .msg{margin:10px 0 0;padding:8px 12px;border-radius:var(--r-sm);font-size:12.5px;color:var(--danger);background:#FBEDEA}
 .msg:empty{display:none}
-.looks{display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding:4px 2px 6px;scroll-snap-type:x proximity}
+.lookwrap{position:relative}
+.looks{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:4px 2px;scroll-snap-type:x proximity;scroll-behavior:smooth}
+.looks::-webkit-scrollbar{display:none}
+.lookwrap.l .looks{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px);mask-image:linear-gradient(90deg,transparent,#000 48px)}
+.lookwrap.r .looks{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent)}
+.lookwrap.l.r .looks{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
+.lookwrap .nav{position:absolute;top:50%;width:30px;height:30px;margin-top:-15px;border:0;border-radius:50%;background:rgba(255,255,255,.95);
+  box-shadow:0 2px 8px rgba(0,0,0,.12);color:var(--ink);font-size:15px;line-height:30px;padding:0;opacity:0;pointer-events:none;transition:opacity .2s}
+.lookwrap .nav.prev{left:-6px}.lookwrap .nav.next{right:-6px}
+.lookcard:hover .lookwrap.l .nav.prev,.lookcard:hover .lookwrap.r .nav.next{opacity:1;pointer-events:auto}
+.lookwrap .nav:hover{background:var(--ink);color:#fff}
 .look{scroll-snap-align:start}
 .look{position:relative;flex:0 0 96px}
 .look button.v{display:block;width:100%;padding:0;border:0;border-radius:10px;overflow:hidden;aspect-ratio:3/4;background:var(--tile-hi)}
@@ -141,8 +151,8 @@ button{cursor:pointer}
 .mirrorcol{min-width:0;display:flex}
 .mirrorcol .stage{aspect-ratio:auto;height:100%;flex:1}
 .stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#F7F6F3;perspective:1400px;touch-action:pan-y;user-select:none;transition:background-color .6s}
-.stage::after{content:"";position:absolute;left:28%;right:28%;bottom:3%;height:4%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,30,20,.16),transparent);pointer-events:none}
-.model{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .8s var(--ease)}
+.stage::after{content:"";position:absolute;left:30%;right:30%;bottom:7%;height:4%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,30,20,.16),transparent);pointer-events:none}
+.model{position:absolute;inset:7% 9% 9%;transform-style:preserve-3d;transition:transform .8s var(--ease)}
 .breathe{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
 .frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
@@ -243,7 +253,7 @@ button{cursor:pointer}
     </section>
     <section class="lookcard" aria-label="穿过的搭配">
       <h3>Looks</h3>
-      <div class="looks" id="looks"></div>
+      <div class="lookwrap" id="lookwrap"><button class="nav prev" aria-label="往前" id="lprev">‹</button><div class="looks" id="looks"></div><button class="nav next" aria-label="往后" id="lnext">›</button></div>
     </section>
     </div>
   </section>
@@ -264,7 +274,8 @@ const HANGER=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5
 const PANTS_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M50 17v8" stroke="#9d9d9d" stroke-width="2.2"/><rect x="10" y="24" width="80" height="6" rx="3" fill="#8A5A3B"/></svg>`;
 const S_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0M50 19c0 5-6 6-6 11a6 6 0 0 0 12 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-const HOOK_ONLY=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 24V18c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+const HOOK_ONLY=`<svg class="hook" viewBox="0 0 28 50"><defs><linearGradient id="chrome" x1="0" x2="1"><stop offset="0" stop-color="#8d8d8d"/><stop offset=".45" stop-color="#e9e9e9"/><stop offset="1" stop-color="#9a9a9a"/></linearGradient></defs>
+  <path d="M14 50V15A6.2 6.2 0 1 1 26 13.5" fill="none" stroke="url(#chrome)" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 const CLIPS=`<svg class="clips" viewBox="0 0 100 40"><rect x="18" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/><rect x="73" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/></svg>`;
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
@@ -364,7 +375,7 @@ function shirtFit(i){
   const f=i.fit;
   if(f&&f.own&&i.cut){  /* 自带衣架：挂钩顶端碰到衣杆，挂钩在中间 */
     const w=Math.min(200,300/f.ar), hh=w*f.ar;
-    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:20px;height:${hh.toFixed(1)}px;bottom:auto`;
+    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:${(40-(f.ty||0)*hh).toFixed(1)}px;height:${hh.toFixed(1)}px;bottom:auto`;
   }
   if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
   const w=Math.max(130,Math.min(260,132/f.sw,300/f.ar)), hh=w*f.ar, nx=f.nx??f.cx;
@@ -402,6 +413,16 @@ function renderRail(){
 }
 $('rackadd').addEventListener('click',()=>pickFiles('shirt'));
 /* Looks 用滚轮也能左右滑 */
+const lookEdges=()=>{const l=$('looks'),w=$('lookwrap');w.classList.toggle('l',l.scrollLeft>4);w.classList.toggle('r',l.scrollLeft+l.clientWidth<l.scrollWidth-4)};
+$('looks').addEventListener('scroll',lookEdges,{passive:true});addEventListener('resize',lookEdges);
+$('lprev').addEventListener('click',()=>{const l=$('looks');l.scrollLeft-=l.clientWidth*.8});
+$('lnext').addEventListener('click',()=>{const l=$('looks');l.scrollLeft+=l.clientWidth*.8});
+/* 按住拖动也能左右切换 */
+{let down=false,sx=0,sl=0,moved=false;const l=$('looks');
+  l.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;down=true;moved=false;sx=e.clientX;sl=l.scrollLeft});
+  addEventListener('pointermove',e=>{if(!down)return;const dx=e.clientX-sx;if(Math.abs(dx)>4){moved=true;l.style.scrollBehavior='auto';l.scrollLeft=sl-dx}});
+  addEventListener('pointerup',()=>{if(down){down=false;l.style.scrollBehavior=''}});
+  l.addEventListener('click',e=>{if(moved){e.stopPropagation();e.preventDefault();moved=false}},true);}
 $('looks').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){e.currentTarget.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 /* 鞋架上大小统一：按“实心部分的面积”缩放，而不是按图片外框，细长的项链和宽大的鞋看起来一样分量 */
 function shelfSize(i){
@@ -545,6 +566,7 @@ function renderFit(){
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
 
 function renderLooks(){
+  requestAnimationFrame(lookEdges);
   $('looks').replaceChildren(...(S.looks.length?S.looks.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
     h('button',{class:'v','aria-label':'查看这套搭配',onclick(){
       const q=l.sel||{};
