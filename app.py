@@ -678,6 +678,27 @@ def fix_inputs(sel, parts, note="", snap=None):
     return imgs, [a, b], bool(todo)
 
 
+PALETTE_WEIGHT = {"shirt": 1.0, "pants": 0.8, "shoes": 0.3, "hat": 0.2, "belt": 0.15, "accessory": 0.15}
+
+
+def look_palette(lk):
+    """这身穿搭的色卡：用存下来的单品抠图提色（3–5 个），没有就用衣橱里现有的单品。"""
+    import palette
+    srcs = [(RESULTS / p["file"], PALETTE_WEIGHT.get(p["category"], .15)) for p in lk.get("pieces", [])
+            if (RESULTS / p["file"]).exists()]
+    if not srcs:
+        items, q = db_load()["items"], lk.get("sel") or {}
+        for cat in ("shirt", "pants", "belt", "shoes", "hat"):
+            it = items.get(q.get(f"{cat}_id") or "")
+            if it:
+                srcs.append((ITEMS / (it.get("cut") or it["file"]), PALETTE_WEIGHT[cat]))
+    try:
+        return palette.palette(srcs) if srcs else []
+    except Exception as e:
+        log_error("palette", e)
+        return []
+
+
 JOBS = {}
 
 
@@ -756,6 +777,7 @@ async def run_job(job, req: TryOn, plan):
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
                 "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"], "check": qa,
                 "sel": req.model_dump(exclude={"force"}), **snapshot(look_id, req)}
+        look["palette"] = look_palette(look)
         with _lock:
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
@@ -806,6 +828,11 @@ def strip_demo_bar(path):
 def state():
     with _lock:
         db = db_load()
+        todo = [lk for lk in db["looks"].values() if "palette" not in lk]
+        for lk in todo:  # 旧搭配补上色卡
+            lk["palette"] = look_palette(lk)
+        if todo:
+            db_save(db)
         if not db.get("bar_fixed"):
             for it in db["items"].values():
                 if it["category"] == "person":
