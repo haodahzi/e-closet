@@ -293,6 +293,44 @@ async def seedream_views(client, images, prompt, n):
     return urls
 
 
+async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
+    """Seedance 首尾帧图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。"""
+    model = env("SEEDANCE_MODEL", "doubao-seedance-2-0-fast-260128")
+    pic = small_uri(image)
+    body = {"model": model,
+            "content": [{"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": pic}, "role": "first_frame"},
+                        {"type": "image_url", "image_url": {"url": pic}, "role": "last_frame"}],
+            "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive",
+            "duration": int(env("VIDEO_SECONDS", "6")), "camera_fixed": True, "watermark": False,
+            "generate_audio": False}
+    h = {"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"}
+    r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
+    if r.status_code in (401, 403):
+        raise GenError("火山方舟拒绝了 ARK_API_KEY，或者还没开通 Seedance 视频模型。", r.status_code)
+    j = r.json() if "json" in r.headers.get("content-type", "") else {}
+    if r.status_code >= 400 or "error" in j and j.get("error"):
+        e = j.get("error") or {}
+        raise GenError(f"视频任务提交失败（{r.status_code}）：{e.get('code', '')} {e.get('message', r.text[:300])}"
+                       "。确认已在火山方舟开通 Seedance 2.0，或在 .env 里改 SEEDANCE_MODEL。", r.status_code)
+    tid = j["id"]
+    t0 = time.time()
+
+    async def status():
+        on_wait(int(time.time() - t0))
+        q = await client.get(f"{ARK}/contents/generations/tasks/{tid}", headers=h)
+        return q.json()
+
+    done = await poll(status, lambda s: s.get("status") == "succeeded",
+                      lambda s: ((s.get("error") or {}).get("message") or s.get("status"))
+                      if s.get("status") in ("failed", "cancelled", "expired") else None,
+                      "生成转身视频", every=4, limit=900)
+    url = (done.get("content") or {}).get("video_url")
+    if not url:
+        raise GenError(f"视频生成完了但没有返回视频地址：{json.dumps(done, ensure_ascii=False)[:300]}")
+    return url
+
+
 CHECKS = ("same_person", "shirt_match", "outfit_complete", "natural", "wear_correct")
 
 
@@ -392,6 +430,6 @@ NAMES = {"seedream": "即梦", "bailian": "阿里云百炼", "kling": "可灵", 
 
 def price(kind, provider):
     """界面估价用，按控制台实际价格在 .env 里改。"""
-    defaults = {("edit", "seedream"): 0.25, ("tryon", "bailian"): 0.5, ("refine", "bailian"): 0.5, ("edit", "bailian"): 0.3,
+    defaults = {("video", "seedance"): 1.5, ("edit", "seedream"): 0.25, ("tryon", "bailian"): 0.5, ("refine", "bailian"): 0.5, ("edit", "bailian"): 0.3,
                 ("tryon", "kling"): 0.5, ("edit", "fal"): 1.1, ("tryon", "fal"): 0.5, ("refine", "fal"): 0.5}
     return float(env(f"PRICE_{kind}_{provider}".upper(), str(defaults.get((kind, provider), 0))))

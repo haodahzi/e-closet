@@ -143,6 +143,7 @@ button{cursor:pointer}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
 .frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
 .frame.show{opacity:1}
+.frame.vid{transition:opacity .35s ease}
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:var(--soft);padding:32px}
 .empty b{font:400 30px/1.2 var(--serif);font-style:italic;color:var(--ink)}
 .empty button{border:0;border-radius:999px;background:var(--ink);color:#fff;padding:10px 20px;font-size:13px}
@@ -404,19 +405,32 @@ function renderShelf(){
 }
 
 /* ---------- 镜子 ---------- */
-let frameIdx=0, turnTimer=null;
+let playOnce=null;
 function frames(){
-  if(viewing&&!peek)return(viewing.turn&&viewing.turn.length?viewing.turn:[viewing.file]).map(f=>'/media/results/'+f+'?t='+viewing.created);
+  if(viewing&&!peek)return['/media/results/'+viewing.file+'?t='+viewing.created];
   if(peek&&viewing&&viewing.person_file)return['/media/results/'+viewing.person_file];
   const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
   return p?[src(p)]:[];
 }
+const vid=()=>$('frames').querySelector('video');
+/* 转一圈：正面站着 → 原地转身一周 → 回到正面。视频最后一帧和静态图是同一个姿势，播完淡回静态图 */
+function playTurn(from=0){
+  const v=vid();if(!v)return;
+  v.currentTime=from;v.classList.add('show');
+  v.play().catch(()=>{});
+}
 function renderStage(){
   const st=$('stage'), list=frames();
   st.querySelectorAll('.empty,.badge,.acts,.busy,.turnhint').forEach(e=>e.remove());
-  clearInterval(turnTimer);turnTimer=null;
-  $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:n?'':'试穿效果',draggable:'false'})));
-  frameIdx=0;matchBackdrop();
+  $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
+  matchBackdrop();
+  const hasVid=viewing&&viewing.video&&!peek&&!job;
+  if(hasVid){
+    const v=h('video',{class:'frame vid',src:'/media/results/'+viewing.video+'?t='+viewing.created,muted:true,playsinline:true,preload:'auto'});
+    v.muted=true;v.addEventListener('ended',()=>v.classList.remove('show'));
+    $('frames').append(v);
+    if(playOnce===viewing.id){playOnce=null;v.addEventListener('loadeddata',()=>playTurn(),{once:true})}
+  }
   if(!list.length){
     st.append(h('div',{class:'empty'},h('b',{},'Hello.'),'先放一张自己的全身照，再从衣杆上挑一件衬衫。',
       h('button',{onclick:()=>openDrawer()},'放一张照片')));
@@ -431,14 +445,12 @@ function renderStage(){
       addEventListener('pointerup',off);addEventListener('pointercancel',off);addEventListener('blur',off)});
     b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!peek){e.preventDefault();peek=true;renderStage();addEventListener('keyup',function u(){removeEventListener('keyup',u);off()})}});
     acts.append(b);
-    if(!(viewing.turn&&viewing.turn.length))acts.append(h('button',{title:S.config.turn_cost?`约 ¥${S.config.turn_cost.toFixed(2)}`:'',onclick:makeTurn},'转一圈'));
+    acts.append(viewing.video?h('button',{onclick:()=>playTurn()},'转一圈'):
+      h('button',{title:'生成一段原地转身一周的视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:makeTurn},'转一圈'));
     acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
     st.append(acts);
   }
-  if(list.length>1&&!job){
-    st.append(h('div',{class:'turnhint'},hoverable?'左右拖动转身':'左右滑动转身'));
-    turnTimer=setInterval(()=>{if(!dragging)show(frameIdx+1)},900);
-  }
+  if(hasVid)st.append(h('div',{class:'turnhint'},hoverable?'左右拖动看转身，松手转回正面':'左右滑动看转身'));
   if(job)st.append(h('div',{class:'busy'},h('i'),(job.step||'生成中')+` · ${Math.round((Date.now()-jobStart)/1000)} 秒`));
 }
 function matchBackdrop(){  /* 背景取照片边缘的颜色，让人像和背景连成一片 */
@@ -453,20 +465,17 @@ function matchBackdrop(){  /* 背景取照片边缘的颜色，让人像和背�
   }catch(e){}};
   f.complete&&f.naturalWidth?go():f.addEventListener('load',go,{once:true});
 }
-function show(n){
-  const fs=$('frames').children;if(!fs.length)return;
-  frameIdx=((n%fs.length)+fs.length)%fs.length;
-  [...fs].forEach((f,k)=>f.classList.toggle('show',k===frameIdx));
-}
-let dragging=false, dragX=0, dragStart=0;
+/* 有转身视频时，左右拖动就是在视频里来回转；松手后接着转完、回到正面 */
+let dragging=false, dragX=0, dragT=0;
 $('stage').addEventListener('pointermove',e=>{
-  const r=e.currentTarget.getBoundingClientRect(), x=(e.clientX-r.left)/r.width-.5;
-  if(dragging){show(dragStart+Math.round((e.clientX-dragX)/40));return}
+  const r=e.currentTarget.getBoundingClientRect(), x=(e.clientX-r.left)/r.width-.5, v=vid();
+  if(dragging&&v&&v.duration){v.currentTime=Math.max(0,Math.min(v.duration-.05,dragT+(e.clientX-dragX)/r.width*v.duration));return}
   if(hoverable)$('model').style.transform=`rotateY(${(x*9).toFixed(2)}deg)`;
 });
-$('stage').addEventListener('pointerleave',()=>{$('model').style.transform='';dragging=false});
-$('stage').addEventListener('pointerdown',e=>{if($('frames').children.length>1&&!e.target.closest('button')){dragging=true;dragX=e.clientX;dragStart=frameIdx}});
-addEventListener('pointerup',()=>{dragging=false});
+$('stage').addEventListener('pointerleave',()=>{$('model').style.transform='';if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
+$('stage').addEventListener('pointerdown',e=>{const v=vid();if(v&&v.duration&&!e.target.closest('button')){
+  dragging=true;dragX=e.clientX;v.pause();if(!v.classList.contains('show')){v.currentTime=0;v.classList.add('show')}dragT=v.currentTime}});
+addEventListener('pointerup',()=>{if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
 
 /* ---------- 今天这一身 ---------- */
 function body(force=false){
@@ -517,7 +526,7 @@ function renderLooks(){
       const q=l.sel||{};
       sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
         shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open'};
-      viewing=l;say('');keep();render()}},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
+      viewing=l;if(l.video)playOnce=l.id;say('');keep();render()}},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
     h('button',{class:'x','aria-label':'删除',onclick:async()=>{if(!confirm('删除这张试穿照？'))return;
       try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'))):
     [h('span',{class:'muted'},'生成过的会留在这里')]));
@@ -542,7 +551,7 @@ async function generate(force=false){
   catch(e){job=null;say(e.message);render()}
 }
 async function makeTurn(){
-  if(job||!viewing)return;say('');
+  if(job||!viewing)return;say('');playOnce=viewing.id;
   try{await follow(await api(`/api/looks/${viewing.id}/turn`,{method:'POST'}))}catch(e){job=null;say(e.message);render()}
 }
 $('go').addEventListener('click',()=>generate(false));

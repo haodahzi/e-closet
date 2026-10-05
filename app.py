@@ -608,7 +608,7 @@ async def run_job(job, req: TryOn, plan):
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
                 o = db["looks"][old]
-                for f in {o["file"], *o.get("turn", []), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
+                for f in {o["file"], *o.get("turn", []), o.get("video"), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
                     (RESULTS / f).unlink(missing_ok=True)
                 del db["looks"][old]
             db["looks"][look_id] = look
@@ -644,7 +644,7 @@ def state():
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
-                       "turn_cost": 0 if MOCK else round(P.price("edit", "seedream") * TURN_VIEWS, 2)}}
+                       "turn_cost": 0 if MOCK else P.price("video", "seedance")}}
 
 
 @app.post("/api/items")
@@ -712,56 +712,42 @@ def delete_item(item_id: str):
     return {"ok": True}
 
 
-TURN_VIEWS = 5  # 正面之外再生成 5 个角度，连同正面一共 6 帧
-
-
 def turn_prompt():
     she = "she" if P.env("GENDER", "woman") == "woman" else "he"
     her = "her" if she == "she" else "his"
-    return (f"Image 1 shows a person wearing an outfit. Generate {TURN_VIEWS} separate photos of exactly the same "
-            f"person in exactly the same outfit, as if {she} slowly turns around on a turntable: same face, hair, "
-            "body shape, same shirt with identical colour and pattern scale, worn the same way, same trousers, shoes "
-            "and accessories, same plain studio background and lighting, same relaxed standing pose. The camera stays "
-            "at the same height and distance; full body from head to feet in every photo. In order: "
-            f"1) three-quarter view turned to {her} right, 2) {her} right side profile, 3) back view, "
-            f"4) {her} left side profile, 5) three-quarter view turned to {her} left. Photorealistic.")
+    return (f"The same person stands facing the camera, then slowly turns around in place a full 360 degrees at an even, "
+            f"elegant pace, showing {her} side, back and other side, and comes back to face the camera and stands "
+            "still for the final moment. Feet stay on the same spot; arms relaxed. Fixed camera, full body from head to "
+            "feet always in frame, same background and lighting. The outfit keeps exactly the same colours, pattern, "
+            "fit and the way the shirt is worn; fabric moves naturally with the turn. No walking, no cuts, no zoom, "
+            "no extra people, no text.")
 
 
 async def run_turn(job, look_id):
+    """转一圈：用 Seedance 把正面试穿图做成“原地转身一周、回到正面站定”的短视频。"""
     try:
         lk = db_load()["looks"][look_id]
-        src = RESULTS / lk["file"]
-        frames = []
         if MOCK:
-            base = Image.open(src).convert("RGB")
-            for i in range(TURN_VIEWS):
-                job.update(step=f"生成角度 {i + 1}/{TURN_VIEWS}")
-                await asyncio.sleep(0.3)
-                im = ImageOps.mirror(base) if i % 2 == 0 else base.copy()
-                ImageDraw.Draw(im).text((20, 20), f"DEMO VIEW {i + 1}", fill="white")
-                frames.append(im)
-        else:
-            if not P.ready("seedream"):
-                raise P.GenError("转一圈要用即梦，.env 里还没填 ARK_API_KEY。")
-            job.update(step="生成多个角度")
-            refs = [src]
-            shirt = db_load()["items"].get((lk.get("sel") or {}).get("shirt_id") or "")
-            if shirt:
-                refs.append(ITEMS / shirt["file"])
-            async with httpx.AsyncClient(timeout=P.timeout(600)) as client:
-                urls = await P.seedream_views(client, refs, turn_prompt(), TURN_VIEWS)
-                frames = [await fetch_image(client, u) for u in urls]
-        names = []
-        for i, im in enumerate(frames):
-            names.append(f"{look_id}_v{i + 1}.jpg")
-            im.save(RESULTS / names[-1], quality=92)
+            raise P.GenError("演示模式不会生成视频。在 .env 里填好 ARK_API_KEY 后再试。")
+        if not P.ready("seedream"):
+            raise P.GenError("转一圈要用即梦（火山方舟），.env 里还没填 ARK_API_KEY。")
+        job.update(step="生成转身视频")
+        async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
+            url = await P.seedance_turn(client, RESULTS / lk["file"], turn_prompt(),
+                                        lambda s: job.update(step="生成转身视频（通常 1–3 分钟）"))
+            job.update(step="下载视频")
+            r = await client.get(url, follow_redirects=True, timeout=P.timeout(300))
+            r.raise_for_status()
+        name = f"{look_id}_turn.mp4"
+        (RESULTS / name).write_bytes(r.content)
         with _lock:
             db = db_load()
             if look_id in db["looks"]:
-                db["looks"][look_id]["turn"] = [lk["file"]] + names
+                db["looks"][look_id]["video"] = name
                 db_save(db)
                 job.update(status="done", look=db["looks"][look_id])
             else:
+                (RESULTS / name).unlink(missing_ok=True)
                 job.update(status="error", error="这套搭配已经被删除。")
     except P.GenError as e:
         log_error("run_turn", e)
@@ -773,13 +759,13 @@ async def run_turn(job, look_id):
 
 @app.post("/api/looks/{look_id}/turn")
 async def make_turn(look_id: str):
-    """给一套已生成的搭配补上多个角度，界面上就能自然转动。"""
+    """给一套已生成的搭配做一段原地转身一周的视频。"""
     lk = db_load()["looks"].get(look_id)
     if not lk:
         raise HTTPException(404, "这套搭配已经被删除。")
-    if lk.get("turn"):
+    if lk.get("video") and (RESULTS / lk["video"]).exists():
         return {"cached": True, "look": lk}
-    job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0, "steps": ["生成多个角度"]}
+    job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0, "steps": ["生成转身视频"]}
     JOBS[job["id"]] = job
     asyncio.create_task(run_turn(job, look_id))
     return {"cached": False, "job": job}
@@ -791,7 +777,7 @@ def delete_look(look_id: str):
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            for f in {lk["file"], *lk.get("turn", []), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
+            for f in {lk["file"], *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
                 (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
