@@ -34,7 +34,7 @@ button{cursor:pointer}
 .demo{font-size:12px;color:var(--soft);display:inline-flex;align-items:center;gap:7px}
 .demo::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
 
-.room{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;padding:6px 32px 28px;align-items:stretch}
+.room{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(300px,1fr);gap:28px;padding:6px 32px 28px;align-items:stretch}
 .closet{min-width:0;display:flex;flex-direction:column;gap:14px}
 
 /* ---------- 衣杆 ---------- */
@@ -49,17 +49,19 @@ button{cursor:pointer}
 /* 衣服只在衣杆两端支架之间挂：挂得多就互相挤，不会滑出去 */
 .rail{position:relative;display:flex;justify-content:center;align-items:flex-start;margin:0 46px;padding-bottom:16px;min-height:330px}
 .hang{position:relative;flex:0 1 58px;min-width:9px;height:312px;transition:flex-basis .6s var(--ease),flex-shrink .6s}
+.hang.pants{flex-basis:38px}
 .hang.front{flex:0 0 232px}
 .sw{position:absolute;inset:0;transform-origin:50% 10px}
 .g{position:absolute;left:50%;top:0;width:200px;margin-left:-100px;height:296px;transform-origin:50% 10px;
-  transform:perspective(900px) rotateY(74deg);transition:transform .6s var(--ease),filter .6s;filter:brightness(.9) saturate(.95);
+  transform:perspective(900px) rotateY(74deg);transition:transform .75s cubic-bezier(.3,1.32,.5,1),filter .6s;filter:brightness(.9) saturate(.95);
   animation:sway var(--t,6s) ease-in-out var(--d,0s) infinite alternate}
 @keyframes sway{from{rotate:-.7deg}to{rotate:.7deg}}
 .hang.front .g{transform:perspective(900px) rotateY(0) scale(1.04);filter:none}
 /* 衣架在衣服后面：只露出挂钩，肩膀把衣架两头盖住 */
-.hook{position:absolute;left:50%;top:0;width:100px;margin-left:-50px;height:40px;z-index:0;pointer-events:none}
+.hook{position:absolute;left:50%;top:0;width:84px;margin-left:-42px;height:34px;z-index:0;pointer-events:none}
+.hang.pants .hook{width:100px;margin-left:-50px;height:40px}
 .g .pick{position:absolute;left:0;right:0;top:15px;bottom:0;border:0;background:none;padding:0;display:block;z-index:1}
-.g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;
+.g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;transform-origin:50% 0;
   filter:drop-shadow(0 14px 14px rgba(55,45,35,.16))}
 .g .pick img.card{background:#fff;border-radius:6px;padding:8px;height:auto;max-height:100%}
 .hang.pants .g .pick{top:27px}
@@ -106,6 +108,7 @@ button{cursor:pointer}
 .piece img{width:30px;height:30px;object-fit:contain;border-radius:50%;background:#fff;padding:2px;flex:0 0 auto}
 .piece .ph{width:30px;height:30px;border:1.5px dashed var(--line);border-radius:50%;flex:0 0 auto;background:#fff}
 .piece span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.piece.saved{opacity:.75}
 .piece.none{color:var(--soft);background:none;border:1px dashed var(--line);cursor:pointer}
 .piece.none:hover{color:var(--ink);border-color:var(--ink)}
 .piece.has:hover{background:var(--tile-hi)}
@@ -131,7 +134,7 @@ button{cursor:pointer}
 .look .x{top:-6px;right:-6px;width:18px;height:18px;line-height:18px;font-size:11px}
 
 /* ---------- 镜子 ---------- */
-.mirrorcol{width:min(calc((100vh - 120px) * .75),600px);min-width:280px;display:flex}
+.mirrorcol{min-width:0;display:flex}
 .mirrorcol .stage{aspect-ratio:auto;height:100%;flex:1}
 .stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#F7F6F3;perspective:1400px;touch-action:pan-y;user-select:none;transition:background-color .6s}
 .stage::after{content:"";position:absolute;left:28%;right:28%;bottom:3%;height:4%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,30,20,.16),transparent);pointer-events:none}
@@ -333,6 +336,13 @@ function setHover(id){
   document.querySelectorAll('.hang[data-id]').forEach(e=>e.classList.toggle('front',e.dataset.id===f));
   document.querySelectorAll('.thing[data-id]').forEach(e=>e.classList.toggle('front',e.dataset.id===hovered));
   if(f&&f!==prev)ripple(f);else if(!f&&prev)ripple(prev,.5);
+  /* 布料感：转身时衣摆比领口慢半拍，轻轻荡一下再停 */
+  const flutter=(id,k)=>{const im=document.querySelector(`.hang[data-id="${id}"] .pick img`);
+    if(im&&im.animate&&!matchMedia('(prefers-reduced-motion:reduce)').matches)
+      im.animate([0,1,-.6,.3,-.12,0].map(v=>({transform:`skewX(${(v*5*k).toFixed(2)}deg) scaleY(${(1-Math.abs(v)*.012*k).toFixed(4)})`})),
+        {duration:1200,easing:'cubic-bezier(.25,.6,.35,1)'})};
+  if(f&&f!==prev)flutter(f,1);
+  if(prev&&prev!==f)flutter(prev,-.6);
   caption();
 }
 async function tidy(i,btn){
@@ -340,13 +350,19 @@ async function tidy(i,btn){
   $('caption').replaceChildren(h('span',{},'正在用即梦整理这件衣服，通常要 20–60 秒…'));
   try{await api(`/api/items/${i.id}/tidy`,{method:'POST'});await refresh()}catch(e){say(e.message);btn.disabled=false;btn.textContent='整理'}
 }
+/* 按肩宽缩放衬衫：肩膀正好压在衣架两臂上，挂钩从领口里出来 */
+function shirtFit(i){
+  const f=i.fit; if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
+  const w=Math.max(130,Math.min(260,132/f.sw,300/f.ar)), hh=w*f.ar, nx=f.nx??f.cx;
+  return `left:${(100-nx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:8px;height:${hh.toFixed(1)}px;bottom:auto`;
+}
 function hangEl(i,n){
   const img=h('img',{src:cut(i),alt:nameOf(i),draggable:'false',class:i.cut?'':'card',loading:'lazy'});
   const el=h('div',{class:`hang ${i.category}`+(isOn(i)?' on':''),'data-id':i.id,
       style:`--d:${-(n*1.37%5).toFixed(2)}s;--t:${(5.2+n*0.7%2.4).toFixed(2)}s`},
     h('span',{class:'mark'}),
     h('div',{class:'sw'},h('div',{class:'g'},h('span',{html:i.category==='pants'?PANTS_HOOK:HANGER}),
-      h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i)+(isOn(i)?'（穿着）':''),
+      h('button',{class:'pick','aria-pressed':String(isOn(i)),style:shirtFit(i),'aria-label':nameOf(i)+(isOn(i)?'（穿着）':''),
         onclick(){ if(!hoverable&&hovered!==i.id){setHover(i.id);return} ripple(i.id,.8);wearIt(i)},
         onfocus(){setHover(i.id)}},img),
       i.category==='pants'?h('span',{html:CLIPS}):null)),
@@ -371,11 +387,6 @@ function renderRail(){
   const keepFront=hovered&&item(hovered)?hovered:null;hovered=null;setHover(keepFront);
 }
 $('rackadd').addEventListener('click',()=>pickFiles('shirt'));
-/* 右边人像和左边一样高（底部和 Looks 对齐），宽度按 3:4 */
-const fitMirror=()=>{const c=document.querySelector('.closet'),m=document.querySelector('.mirrorcol');
-  if(innerWidth<=1000){m.style.width='';return}
-  m.style.width=Math.max(280,Math.min(620,Math.round(c.offsetHeight*.72)))+'px'};
-new ResizeObserver(fitMirror).observe(document.querySelector('.closet'));addEventListener('resize',fitMirror);
 /* Looks 用滚轮也能左右滑 */
 $('looks').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){e.currentTarget.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 function renderShelf(){
@@ -396,6 +407,7 @@ function renderShelf(){
 let frameIdx=0, turnTimer=null;
 function frames(){
   if(viewing&&!peek)return(viewing.turn&&viewing.turn.length?viewing.turn:[viewing.file]).map(f=>'/media/results/'+f+'?t='+viewing.created);
+  if(peek&&viewing&&viewing.person_file)return['/media/results/'+viewing.person_file];
   const p=item(peek&&viewing&&viewing.sel?viewing.sel.person_id:sel.person);
   return p?[src(p)]:[];
 }
@@ -410,11 +422,14 @@ function renderStage(){
       h('button',{onclick:()=>openDrawer()},'放一张照片')));
   }else if(peek||!viewing)st.append(h('span',{class:'badge'},'原照'));
   else if(viewing.demo)st.append(h('span',{class:'badge'},'演示图'));
-  if(viewing&&!job&&!peek){
+  if(viewing&&!job){
     const acts=h('div',{class:'acts'});
-    const b=h('button',{},'按住看原照');
-    const on=()=>{peek=true;renderStage()},off=()=>{if(peek){peek=false;renderStage()}};
-    b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);
+    const b=h('button',{'aria-pressed':String(peek)},peek?'松开回到搭配':'按住看原照');
+    const off=()=>{removeEventListener('pointerup',off);removeEventListener('pointercancel',off);removeEventListener('blur',off);
+      if(peek){peek=false;renderStage()}};
+    b.addEventListener('pointerdown',e=>{e.preventDefault();peek=true;renderStage();
+      addEventListener('pointerup',off);addEventListener('pointercancel',off);addEventListener('blur',off)});
+    b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!peek){e.preventDefault();peek=true;renderStage();addEventListener('keyup',function u(){removeEventListener('keyup',u);off()})}});
     acts.append(b);
     if(!(viewing.turn&&viewing.turn.length))acts.append(h('button',{title:S.config.turn_cost?`约 ¥${S.config.turn_cost.toFixed(2)}`:'',onclick:makeTurn},'转一圈'));
     acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
@@ -477,7 +492,12 @@ function renderFit(){
   const chip=(cat,i,drop)=>i?h('button',{class:'piece has',title:'脱下',onclick:()=>{if(!job)drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i))):
     h('button',{class:'piece none',title:cat==='shoes'?'鞋子在衣杆下面的鞋架上':'在上面的衣杆上挑',onclick:()=>pointTo(cat)},h('i',{class:'ph'}),h('span',{},cat==='shirt'?'挑一件衬衫':cat==='shoes'?'鞋子 ↑ 鞋架':LABEL[cat]));
   const drop=k=>()=>{sel[k]=null;viewing=null;keep();render()};
-  $('pieces').replaceChildren(
+  const gone=viewing&&viewing.pieces?viewing.pieces.filter(p=>{const q=viewing.sel||{};
+    const id=p.category==='accessory'?null:q[p.category+'_id'];return p.category==='accessory'?false:!item(id)}):[];
+  if(gone.length){
+    $('pieces').replaceChildren(...(viewing.pieces||[]).map(p=>h('span',{class:'piece saved',title:'这件已经从衣橱拿走，只保存在这套搭配里'},
+      h('img',{src:'/media/results/'+p.file,alt:''}),h('span',{},p.name||LABEL[p.category]))));
+  }else $('pieces').replaceChildren(
     chip('shirt',item(sel.shirt),drop('shirt')),chip('pants',item(sel.pants),drop('pants')),chip('shoes',item(sel.shoes),drop('shoes')),
     ...sel.accessories.map(id=>chip('accessory',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})));
   $('wear').hidden=!sel.shirt;

@@ -206,9 +206,61 @@ def ai_cutout(im: Image.Image, category):
     return out.crop((max(box[0] - m, 0), max(box[1] - m, 0), min(box[2] + m, out.width), min(box[3] + m, out.height))), person
 
 
+def hang_fit(path, category):
+    """量一下透明底单品图，界面按这个把衣服对准衣架。
+    衬衫：从上往下找到领口真正开始的地方（宽度突然变大），把上面露出来的衣架钩、人台头裁掉；
+    再在肩部那一段找最宽处当肩宽。返回 肩宽/图宽、肩部中心、领口中心、高宽比。"""
+    try:
+        import numpy as np
+    except Exception:
+        return None
+    im = Image.open(path)
+    a = np.asarray(im.split()[-1]) > 128
+    h, w = a.shape
+    cols = np.arange(w)
+    rows = []
+    for y in range(h):
+        xs = cols[a[y]]
+        rows.append((xs[0], xs[-1]) if xs.size else None)
+    width = np.array([(r[1] - r[0]) if r else 0 for r in rows], dtype=float)
+    if width.max() <= 0:
+        return None
+    top = 0
+    if category == "shirt":
+        # 领口：宽度第一次超过最大宽度的 30%，并且之后几行都保持住（避开细的挂钩、人台脖子）
+        big = width >= 0.3 * width.max()
+        for y in range(h - 6):
+            if big[y:y + 6].all():
+                top = y
+                break
+        # 人台/模特的头：上面先宽（头）再窄（脖子）再变宽（肩），在脖子最细处裁掉
+        sm = np.convolve(width, np.ones(5) / 5, mode="same")
+        lo, hi = top, top + int(h * 0.4)
+        if hi - lo > 20:
+            y_neck = lo + 5 + int(np.argmin(sm[lo + 5:hi]))
+            head = sm[lo:y_neck].max() if y_neck > lo else 0
+            below = sm[y_neck:hi].max()
+            if head > 1.25 * sm[y_neck] and below > 1.8 * sm[y_neck]:
+                top = y_neck
+        if top > 4:
+            im.crop((0, max(top - 3, 0), w, h)).save(path)
+            return hang_fit(path, "shirt-trimmed")
+    seg = slice(top, top + max(int(h * 0.25), 1))
+    y_sh = top + int(np.argmax(width[seg]))
+    l, r = rows[y_sh]
+    t = rows[top] or rows[y_sh]
+    return {"sw": round((r - l) / w, 3), "cx": round((l + r) / 2 / w, 3), "nx": round((t[0] + t[1]) / 2 / w, 3),
+            "ar": round(h / w, 3), "v": 2}
+
+
 def ensure_cut(it):
     """给单品补一张透明底展示图（只用于界面，给模型的仍是原图）。返回是否有改动。"""
-    if it["category"] not in GARMENTS or it.get("cutv") == CUT_VERSION:
+    if it["category"] not in GARMENTS:
+        return False
+    if it.get("cutv") == CUT_VERSION:
+        if it.get("cut") and (it.get("fit") or {}).get("v") != 2 and (ITEMS / it["cut"]).exists():
+            it["fit"] = hang_fit(ITEMS / it["cut"], it["category"])
+            return True
         return False
     src = ITEMS / it["file"]
     if not src.exists():
@@ -219,20 +271,34 @@ def ensure_cut(it):
     if it.get("cut"):
         (ITEMS / it["cut"]).unlink(missing_ok=True)
     it["cut"], it["cutv"] = None, CUT_VERSION
+    it.pop("fit", None)
     if out is not None:
         it["cut"] = f"{it['id']}_cut{CUT_VERSION}.png"
         out.save(ITEMS / it["cut"])
+        it["fit"] = hang_fit(ITEMS / it["cut"], it["category"])
     return True
 
 
 def tidy_prompts(category, name):
+    """整理成单品图：只要衣服本身，像挂在一个看不见的衣架上；不要模特、人台、假人、衣架。"""
+    nobody = ("Absolutely no person, no mannequin, no dress form, no ghost-mannequin neck, no body parts, "
+              "no hanger, no clip, no props, no text, no shadow box.")
+    keep = ("Keep its exact colour, fabric texture, pattern and stripe/check scale and spacing, collar, buttons, "
+            "pockets, logos and details.")
+    look = {
+        "shirt": "front view, as if hanging on an invisible hanger: collar standing and closed around an empty neck "
+                 "opening (inside back of the collar visible), shoulders gently sloped, sleeves hanging straight down "
+                 "beside the body, natural soft folds, hem straight",
+        "pants": "front view, hanging straight down from the waistband as if clipped at the waist, legs falling "
+                 "naturally side by side, waistband flat and level",
+        "shoes": "the pair side by side, three-quarter front view",
+        "accessory": "front view, laid out neatly",
+    }[category]
     what = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "accessory": name or "accessory"}[category]
-    a = (f"Extract only the {what} from image 1 and show it alone as a clean e-commerce product photo: "
-         "front view, laid flat and neatly shaped (ghost mannequin style for clothing), centred, on a pure white "
-         "background, soft even light. Keep its exact colour, fabric texture, pattern and stripe/check scale, collar, "
-         "buttons, pockets, logos and details. No person, no hanger, no props, no text.")
-    b = (f"Product photo of the {what} from image 1 on a plain white background, front view, every detail, colour "
-         "and pattern exactly the same. Nothing else in the picture.")
+    a = (f"Extract only the {what} from image 1 and show it alone as a clean e-commerce product photo on a pure white "
+         f"background, soft even light, centred, {look}. {keep} {nobody}")
+    b = (f"Product photo of only the {what} from image 1 on a plain white background, {look}. Every detail, colour "
+         f"and pattern exactly the same. {nobody}")
     return [a, b]
 
 
@@ -469,6 +535,29 @@ async def execute(plan, client, on_step=lambda i, s: None, mock=None, item_dir=I
             t.unlink(missing_ok=True)
 
 
+def snapshot(look_id, req: TryOn):
+    """把这身用到的原照和单品图各存一份，删了衣服以后这套搭配照样能看。"""
+    import shutil
+    items = db_load()["items"]
+    out = {"pieces": [], "person_file": None}
+    picks = [("person", req.person_id), ("shirt", req.shirt_id), ("pants", req.pants_id), ("shoes", req.shoes_id)] + \
+            [("accessory", i) for i in req.accessory_ids]
+    for n, (cat, iid) in enumerate(picks):
+        it = items.get(iid or "")
+        if not it:
+            continue
+        src = ITEMS / (it.get("cut") or it["file"])
+        if not src.exists():
+            continue
+        name = f"{look_id}_{n}{src.suffix}"
+        shutil.copyfile(src, RESULTS / name)
+        if cat == "person":
+            out["person_file"] = name
+        else:
+            out["pieces"].append({"category": cat, "name": it.get("name", ""), "file": name})
+    return out
+
+
 JOBS = {}
 
 
@@ -514,11 +603,12 @@ async def run_job(job, req: TryOn, plan):
         im.save(RESULTS / f"{look_id}.jpg", quality=95)
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
                 "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"], "check": qa,
-                "sel": req.model_dump(exclude={"force"})}
+                "sel": req.model_dump(exclude={"force"}), **snapshot(look_id, req)}
         with _lock:
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
-                for f in {db["looks"][old]["file"], *db["looks"][old].get("turn", [])}:
+                o = db["looks"][old]
+                for f in {o["file"], *o.get("turn", []), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
                     (RESULTS / f).unlink(missing_ok=True)
                 del db["looks"][old]
             db["looks"][look_id] = look
@@ -701,7 +791,7 @@ def delete_look(look_id: str):
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            for f in {lk["file"], *lk.get("turn", [])}:
+            for f in {lk["file"], *lk.get("turn", []), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
                 (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
@@ -780,7 +870,7 @@ async def tidy_item(item_id: str):
             raise HTTPException(404, "这件单品已经被删除。")
         for f in {cur["file"], cur.get("cut")} - {orig, None}:
             (ITEMS / f).unlink(missing_ok=True)
-        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person")})
+        cur.update({k: upd.get(k) for k in ("orig", "file", "cut", "cutv", "person", "fit")})
         db_save(db)
         return cur
 
