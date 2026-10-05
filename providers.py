@@ -4,7 +4,7 @@
 - 可灵（Kling）：kolors-virtual-try-on 试穿
 - fal.ai：多图编辑 + 试穿（原方案，保留做对照）
 """
-import asyncio, base64, hashlib, hmac, json, os, time
+import asyncio, base64, hashlib, hmac, json, math, os, time
 from pathlib import Path
 
 import httpx
@@ -297,11 +297,36 @@ SEEDANCE_CANDIDATES = ["doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-2
                        "doubao-seedance-1-0-pro-fast-251015", "doubao-seedance-1-0-pro-250528"]
 
 
+VIDEO_RATIOS = [(16, 9), (4, 3), (1, 1), (3, 4), (9, 16), (21, 9)]
+
+
+def video_frame_uri(x, side=1280):
+    """发给视频模型的首帧：按照片四边的颜色补边成最接近的标准比例（居中，只补不裁）。
+    不补的话模型会自己裁切或补黑边，人在视频里的位置就和照片对不上，播放时像分了层。"""
+    from PIL import Image
+    import io
+    im = Image.open(x).convert("RGB")
+    im.thumbnail((side, side))
+    w, h = im.size
+    rw, rh = min(VIDEO_RATIOS, key=lambda r: abs(math.log((r[0] / r[1]) / (w / h))))
+    W, H = (round(h * rw / rh), h) if w * rh < h * rw else (w, round(w * rh / rw))
+    if (W, H) != (w, h):
+        edge = list(im.crop((0, 0, w, 3)).getdata()) + list(im.crop((0, 0, 3, h)).getdata()) + \
+            list(im.crop((w - 3, 0, w, h)).getdata())
+        bg = tuple(sorted(p[k] for p in edge)[len(edge) // 2] for k in range(3))
+        canvas = Image.new("RGB", (W, H), bg)
+        canvas.paste(im, ((W - w) // 2, (H - h) // 2))
+        im = canvas
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=90)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
 async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回视频 URL。
     模型按 .env 的 SEEDANCE_MODEL 优先，没开通就依次试候选；参数不被支持（比如 1.0 版不支持尾帧、
     时长只能 5/10 秒、没有音频开关）就自动降级再提交。"""
-    pic = small_uri(image)
+    pic = video_frame_uri(image)
     h = {"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"}
     models = [m for m in dict.fromkeys([env("SEEDANCE_MODEL"), *SEEDANCE_CANDIDATES]) if m]
     last = None

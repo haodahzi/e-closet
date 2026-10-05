@@ -63,7 +63,7 @@ button{cursor:pointer}
 /* 衣架在衣服后面：只露出挂钩，肩膀把衣架两头盖住 */
 .hook{position:absolute;left:50%;top:0;width:84px;margin-left:-42px;height:34px;z-index:0;pointer-events:none}
 .hang.pants .hook{width:100px;margin-left:-50px;height:40px}
-.ownhook .hook{width:28px;margin-left:-14px;height:50px;top:-8px;z-index:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
+.ownhook .hook{width:20px;margin-left:-10px;height:36px;top:0;z-index:0}
 .g .pick{position:absolute;left:0;right:0;top:15px;bottom:0;border:0;background:none;padding:0;display:block;z-index:1}
 .g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;transform-origin:50% 0;
   filter:drop-shadow(0 14px 14px rgba(55,45,35,.16))}
@@ -155,20 +155,20 @@ button{cursor:pointer}
 .mirrorcol{min-width:0;display:flex}
 .mirrorcol .stage{aspect-ratio:auto;height:100%;flex:1}
 .stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#F7F6F3;perspective:1400px;touch-action:pan-y;user-select:none;transition:background-color .6s}
-.stage::after{content:"";position:absolute;left:30%;right:30%;bottom:7%;height:4%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,30,20,.16),transparent);pointer-events:none}
 .model{position:absolute;inset:7% 9% 9%;transform-style:preserve-3d;transition:transform .8s var(--ease)}
 .breathe{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
 .frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
+/* 照片四边淡出到背景色：看不到照片的边框 */
+.frame.soft{-webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 7%,#000 95%,transparent);
+  -webkit-mask-composite:source-in;mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 7%,#000 95%,transparent);mask-composite:intersect}
 .frame.show{opacity:1}
-/* 色卡：仿色卡样式，竖排在人物左侧 */
-.stage.withpal .model{left:24%;right:4%}
-.palette{position:absolute;left:5%;top:10%;width:17%;min-width:64px;max-width:100px;display:flex;flex-direction:column;gap:10px;z-index:2;pointer-events:none}
+/* 色卡：仿色卡样式，浮在照片左侧，不挤占人像的位置 */
+.palette{position:absolute;left:5%;top:9%;width:15%;min-width:60px;max-width:92px;display:flex;flex-direction:column;gap:10px;z-index:2;pointer-events:none}
 .pchip{background:#fff;box-shadow:0 2px 7px rgba(40,30,20,.10);display:block;opacity:0;transform:translateX(-6px);animation:pin .5s var(--ease) forwards}
 .pchip .swatch{aspect-ratio:1.25/1}
 .pchip .lb{padding:4px 6px 5px;font:500 8.5px/1.35 var(--sans);color:#3a3936;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
 .pchip .lb .en{color:var(--soft)}
-.pchip .lb b{display:block;font:600 7.5px/1.4 var(--sans);letter-spacing:.14em}
 @keyframes pin{to{opacity:1;transform:none}}
 .frame.vid{transition:opacity .35s ease}
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:var(--soft);padding:32px}
@@ -287,8 +287,8 @@ const HANGER=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5
 const PANTS_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M50 17v8" stroke="#9d9d9d" stroke-width="2.2"/><rect x="10" y="24" width="80" height="6" rx="3" fill="#8A5A3B"/></svg>`;
 const S_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0M50 19c0 5-6 6-6 11a6 6 0 0 0 12 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-const HOOK_ONLY=`<svg class="hook" viewBox="0 0 28 50"><defs><linearGradient id="chrome" x1="0" x2="1"><stop offset="0" stop-color="#8d8d8d"/><stop offset=".45" stop-color="#e9e9e9"/><stop offset="1" stop-color="#9a9a9a"/></linearGradient></defs>
-  <path d="M14 50V15A6.2 6.2 0 1 1 26 13.5" fill="none" stroke="url(#chrome)" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+/* 自带衣架（整理过的）只配一个短挂钩，和原来裤架的钩子一样；钩柄往下伸进衣架后面，衣架和挂钩连在一起不悬空 */
+const HOOK_ONLY=`<svg class="hook" viewBox="0 0 20 36"><path d="M10 36V17c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 const CLIPS=`<svg class="clips" viewBox="0 0 100 40"><rect x="18" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/><rect x="73" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/></svg>`;
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
@@ -400,9 +400,9 @@ async function tidy(i,btn){
 /* 按肩宽缩放衬衫：肩膀正好压在衣架两臂上，挂钩从领口里出来 */
 function shirtFit(i){
   const f=i.fit;
-  if(f&&f.own&&i.cut){  /* 自带衣架：挂钩顶端碰到衣杆，挂钩在中间 */
+  if(f&&f.own&&i.cut){  /* 自带衣架：衣架顶端接在短挂钩的钩柄上，挂钩在中间 */
     const w=Math.min(200,300/f.ar), hh=w*f.ar;
-    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:${(40-(f.ty||0)*hh).toFixed(1)}px;height:${hh.toFixed(1)}px;bottom:auto`;
+    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:${(27-(f.ty||0)*hh).toFixed(1)}px;height:${hh.toFixed(1)}px;bottom:auto`;
   }
   if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
   const w=Math.max(130,Math.min(260,132/f.sw,300/f.ar)), hh=w*f.ar, nx=f.nx??f.cx;
@@ -482,29 +482,73 @@ function frames(){
   return p?[src(p)]:[];
 }
 const vid=()=>$('frames').querySelector('video');
-/* 转一圈：正面站着 → 原地转身一周 → 回到正面。视频最后一帧和静态图是同一个姿势，播完淡回静态图 */
+const still=()=>$('frames').querySelector('img');
+/* 转一圈：正面站着 → 原地转身一周 → 回到正面。
+   播放时照片藏起来（只看视频，不会两层叠在一起）；视频转回正面那一刻就停，淡回照片，不播收尾时的晃动 */
 function playTurn(from=0){
   const v=vid();if(!v)return;
-  v.currentTime=from;v.classList.add('show');
+  v.currentTime=from;v.classList.add('show');if(still())still().classList.remove('show');
   v.play().catch(()=>{});
 }
+function endTurn(){const v=vid();if(!v)return;v.pause();v.classList.remove('show');if(still())still().classList.add('show')}
+function turnEnd(v){return v._end||v.duration}
+/* 视频和照片对齐：发给视频模型前，照片被补白成了标准比例（居中）。
+   按这个把视频摆到和照片完全重合的位置，转身前后人不会跳一下 */
+function alignVideo(){
+  const v=vid(), f=still(), box=$('frames');
+  if(!v||!f||!v.videoWidth||!f.naturalWidth)return;
+  const W=box.clientWidth,H=box.clientHeight, ri=f.naturalWidth/f.naturalHeight, rv=v.videoWidth/v.videoHeight;
+  const iw=Math.min(W,H*ri), ih=iw/ri, cx=W/2, cy=H/2;   /* 照片实际显示的大小 */
+  const vw=rv>ri?ih*rv:iw, vh=rv>ri?ih:iw/rv;
+  Object.assign(v.style,{left:`${cx-vw/2}px`,top:`${cy-vh/2}px`,width:`${vw}px`,height:`${vh}px`,objectFit:'fill'});
+}
+addEventListener('resize',alignVideo);
+/* 找“转回正面”的那一帧：后半段里和第一帧最像的那一刻。之后的画面不播 */
+async function findTurnEnd(src){
+  const v=document.createElement('video');v.muted=true;v.preload='auto';v.src=src;
+  await new Promise((ok,no)=>{v.onloadeddata=ok;v.onerror=no});
+  const c=document.createElement('canvas');c.width=36;c.height=48;const x=c.getContext('2d',{willReadFrequently:true});
+  const grab=async t=>{v.currentTime=t;await new Promise(ok=>v.onseeked=ok);x.drawImage(v,0,0,36,48);
+    const d=x.getImageData(0,0,36,48).data,g=new Float32Array(36*48);for(let k=0;k<g.length;k++)g[k]=d[k*4]*.3+d[k*4+1]*.59+d[k*4+2]*.11;return g};
+  const D=v.duration, f0=await grab(0.05), step=Math.max(.08,D/80);
+  let best=D, bestErr=Infinity;
+  for(let t=D*.55;t<D-.02;t+=step){
+    const g=await grab(t);let e=0;for(let k=0;k<g.length;k++)e+=(g[k]-f0[k])**2;e/=g.length;
+    if(e<bestErr*0.85||(e<bestErr&&t-best<.4)){bestErr=e;best=t}   /* 差不多像的时候取更早的那帧：一回正就停 */
+  }
+  v.removeAttribute('src');v.load();
+  return bestErr<900?Math.min(D,best+.05):D;
+}
+const turnEnds={};
+let stageKey='';
 function renderStage(){
   const st=$('stage'), list=frames();
   st.querySelectorAll('.empty,.badge,.acts,.busy,.turnhint').forEach(e=>e.remove());
-  $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
-  matchBackdrop();
   const pal=viewing&&!peek&&viewing.palette&&viewing.palette.length?viewing.palette:null;
-  st.classList.toggle('withpal',!!pal);
-  st.querySelectorAll('.palette').forEach(e=>e.remove());
-  if(pal)st.append(h('div',{class:'palette','aria-label':'这身的配色'},pal.map((c,n)=>h('div',{class:'pchip',style:`animation-delay:${n*70}ms`},
-    h('div',{class:'swatch',style:`background:${c.hex}`}),h('div',{class:'lb'},h('b',{},'E·CLOSET'),c.hex,h('br'),c.zh,h('br'),h('span',{class:'en'},c.en))))));
   const hasVid=viewing&&viewing.video&&!peek&&!job;
-  if(hasVid){
-    const v=h('video',{class:'frame vid',src:'/media/results/'+viewing.video+'?t='+viewing.created,muted:true,playsinline:true,preload:'auto'});
-    v.muted=true;v.addEventListener('ended',()=>v.classList.remove('show'));
-    $('frames').append(v);
-    if(playOnce===viewing.id){playOnce=null;v.addEventListener('loadeddata',()=>playTurn(),{once:true})}
-  }
+  /* 照片、色卡、视频只在真的换了的时候才重画：生成中每秒刷新进度，不会让色卡一闪一闪 */
+  const key=JSON.stringify([list,pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
+  if(key!==stageKey){
+    stageKey=key;
+    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame soft'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
+    matchBackdrop();
+    const pk=pal?pal.map(c=>c.hex).join():'', old=st.querySelector('.palette');
+    if(!old||old.dataset.k!==pk){if(old)old.remove();
+    if(pal)st.append(h('div',{class:'palette','data-k':pk,'aria-label':'这身的配色'},pal.map((c,n)=>h('div',{class:'pchip',style:`animation-delay:${n*70}ms`},
+      h('div',{class:'swatch',style:`background:${c.hex}`}),h('div',{class:'lb'},c.hex,h('br'),c.zh,h('br'),h('span',{class:'en'},c.en))))));}
+    if(hasVid){
+      const u='/media/results/'+viewing.video+'?t='+viewing.created;
+      const v=h('video',{class:'frame vid soft',src:u,muted:true,playsinline:true,preload:'auto'});
+      v.muted=true;
+      v.addEventListener('ended',endTurn);
+      v.addEventListener('timeupdate',()=>{if(!dragging&&!v.paused&&v.currentTime>=turnEnd(v))endTurn()});
+      v.addEventListener('loadedmetadata',alignVideo);
+      if(still())still().addEventListener('load',alignVideo);
+      $('frames').append(v);
+      (turnEnds[u]??=findTurnEnd(u).catch(()=>null)).then(t=>{if(t)v._end=t});
+      if(playOnce===viewing.id){playOnce=null;v.addEventListener('loadeddata',()=>playTurn(),{once:true})}
+    }
+  }else if(playOnce&&viewing&&playOnce===viewing.id&&vid()){playOnce=null;playTurn()}
   if(!list.length){
     st.append(h('div',{class:'empty'},h('b',{},'Hello.'),'先放一张自己的全身照，再从衣杆上挑一件衬衫。',
       h('button',{onclick:()=>openDrawer()},'放一张照片')));
@@ -529,15 +573,16 @@ function renderStage(){
   if(hasVid)st.append(h('div',{class:'turnhint'},hoverable?'左右拖动看转身，松手转回正面':'左右滑动看转身'));
   if(job)st.append(h('div',{class:'busy'},h('i'),(job.step||'生成中')+` · ${Math.round((Date.now()-jobStart)/1000)} 秒`));
 }
-function matchBackdrop(){  /* 背景取照片边缘的颜色，让人像和背景连成一片 */
+function matchBackdrop(){  /* 背景取照片靠边一圈的颜色（取中位数，不受影子和人影响），再加上照片四边淡出，照片和背景连成一片 */
   const f=$('frames').querySelector('img'), st=$('stage');
   if(!f){st.style.backgroundColor='';return}
   const go=()=>{try{
-    const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d',{willReadFrequently:true});
-    const w=f.naturalWidth,hh=f.naturalHeight,s=Math.max(4,Math.round(w*.04)),px=[];
-    for(const[sx,sy]of[[0,0],[w-s,0],[0,hh*.4],[w-s,hh*.4]]){x.drawImage(f,sx,sy,s,s,0,0,1,1);px.push(x.getImageData(0,0,1,1).data)}
-    const avg=k=>Math.round(px.reduce((a,p)=>a+p[k],0)/px.length);
-    st.style.backgroundColor=`rgb(${avg(0)},${avg(1)},${avg(2)})`;
+    const c=document.createElement('canvas');c.width=40;c.height=54;const x=c.getContext('2d',{willReadFrequently:true});
+    x.drawImage(f,0,0,40,54);const d=x.getImageData(0,0,40,54).data, R=[],G=[],B=[];
+    for(let y=0;y<54;y++)for(let X=0;X<40;X++){
+      if(!((X>=2&&X<=4)||(X>=35&&X<=37)||(y>=2&&y<=4&&X>4&&X<35)))continue;  /* 离边缘一点点的一圈：避开最边上的暗角 */const k=(y*40+X)*4;R.push(d[k]);G.push(d[k+1]);B.push(d[k+2])}
+    const med=a=>a.sort((p,q)=>p-q)[a.length>>1];
+    st.style.backgroundColor=`rgb(${med(R)},${med(G)},${med(B)})`;
   }catch(e){}};
   f.complete&&f.naturalWidth?go():f.addEventListener('load',go,{once:true});
 }
@@ -545,12 +590,12 @@ function matchBackdrop(){  /* 背景取照片边缘的颜色，让人像和背�
 let dragging=false, dragX=0, dragT=0;
 $('stage').addEventListener('pointermove',e=>{
   const r=e.currentTarget.getBoundingClientRect(), x=(e.clientX-r.left)/r.width-.5, v=vid();
-  if(dragging&&v&&v.duration){v.currentTime=Math.max(0,Math.min(v.duration-.05,dragT+(e.clientX-dragX)/r.width*v.duration));return}
+  if(dragging&&v&&v.duration){const D=turnEnd(v);v.currentTime=Math.max(0,Math.min(D-.05,dragT+(e.clientX-dragX)/r.width*D));return}
   if(hoverable)$('model').style.transform=`rotateY(${(x*9).toFixed(2)}deg)`;
 });
 $('stage').addEventListener('pointerleave',()=>{$('model').style.transform='';if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
 $('stage').addEventListener('pointerdown',e=>{const v=vid();if(v&&v.duration&&!e.target.closest('button')){
-  dragging=true;dragX=e.clientX;v.pause();if(!v.classList.contains('show')){v.currentTime=0;v.classList.add('show')}dragT=v.currentTime}});
+  dragging=true;dragX=e.clientX;v.pause();if(!v.classList.contains('show')){v.currentTime=0;v.classList.add('show');if(still())still().classList.remove('show')}dragT=v.currentTime}});
 addEventListener('pointerup',()=>{if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
 
 /* ---------- 今天这一身 ---------- */
