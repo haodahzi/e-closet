@@ -919,7 +919,7 @@ def state():
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "fix_cost": 0 if MOCK else P.price("edit", "seedream"),
-                       "turn_cost": 0 if MOCK else P.price("video", "seedance") * (2 if TURN_STYLE == "halves" else 1)}}
+                       "turn_cost": 0 if MOCK else P.price("video", "seedance")}}
 
 
 @app.post("/api/items")
@@ -1012,16 +1012,16 @@ def turn_prompt():
 
 
 def half_prompt():
-    """半圈：从正面转到背面停住。两段都用这一句（第二段的输入是镜像照片），方向一致才能拼成一整圈。"""
+    """半圈：从正面转到背面停住。另外半圈用镜像拼出来，见 turn.py。"""
     return ("360度转台展示的前半圈，相机固定。"
             "人物站在看不见的旋转台上，以身体中轴为轴心整体匀速旋转半圈（180度）："
-            "从正面开始，从上往下看按逆时针方向转，经过侧面，转到完全背对镜头时停住。"
+            "从正面开始，经过侧面，转到完全背对镜头时停住。"
             "人物像静止的雕塑：手臂、腿、脚、头、表情都不动，不迈步、不摆手、不扭腰。"
             "身体比例和五官不变形。服装的颜色、图案、版型和配饰全程不变。"
             "纯白背景 #FFFFFF，人物全身始终完整在画面中央，大小和位置和第一帧相同，不推拉、不切镜头、不加黑边和文字。")
 
 
-TURN_STYLE = P.env("TURN_STYLE", "halves")  # halves：两段半圈拼成一圈（默认，脸不走样）；single：一次生成一整圈
+TURN_STYLE = P.env("TURN_STYLE", "mirror")  # mirror：生成半圈、镜像拼成一圈（默认，脸不走样）；single：一次生成一整圈
 
 
 async def _video(client, job, image, prompt, label, last_frame=True):
@@ -1032,34 +1032,19 @@ async def _video(client, job, image, prompt, label, last_frame=True):
     return r.content
 
 
-async def turn_halves(client, job, src, out):
-    """两段半圈拼一整圈，见 turn.py。方向没转对就重做第二段一次，还不对就退回一次生成一整圈。"""
+async def turn_mirror(client, job, src, out):
+    """只生成半圈（照片 → 背面），后半圈用镜像倒放拼出来，一共只花一段视频的钱。见 turn.py。"""
     import turn as T
-    tmp = RESULTS / f"_mirror_{uuid.uuid4().hex[:8]}.jpg"
-    files = []
+    half = out.with_suffix(".half.mp4")
     try:
-        ImageOps.mirror(Image.open(src).convert("RGB")).save(tmp, quality=95)
-        a, b = await asyncio.gather(_video(client, job, src, half_prompt(), "生成转身视频", False),
-                                    _video(client, job, tmp, half_prompt(), "生成转身视频", False))
-        for _ in range(2):
-            fa, fb = out.with_suffix(".a.mp4"), out.with_suffix(".b.mp4")
-            files += [fa, fb]
-            fa.write_bytes(a)
-            fb.write_bytes(b)
-            job.update(step="拼接转身视频")
-            A = await asyncio.to_thread(T.read_frames, fa)
-            B = await asyncio.to_thread(T.read_frames, fb, True, A[2])
-            if T.opposite_ways(A[1], B[1]):
-                await asyncio.to_thread(T.stitch, A[0], A[1], B[0], B[1], A[2], A[3], out)
-                return True
-            if _:
-                break
-            print("\n  · 两段半圈转的方向不对，重做第二段", flush=True)
-            b = await _video(client, job, tmp, half_prompt(), "重做后半圈", False)
-        return False
+        half.write_bytes(await _video(client, job, src, half_prompt(), "生成转身视频", False))
+        job.update(step="拼成一整圈")
+        fr, th, size, fps = await asyncio.to_thread(T.read_frames, half)
+        if len(fr) < 12:
+            raise P.GenError("视频太短，没法拼成一整圈。再点一次“转一圈”试试。")
+        await asyncio.to_thread(T.full_turn, fr, th, size, fps, out)
     finally:
-        for f in [tmp, *files]:
-            f.unlink(missing_ok=True)
+        half.unlink(missing_ok=True)
 
 
 async def run_turn(job, look_id):
@@ -1074,14 +1059,16 @@ async def run_turn(job, look_id):
         name = f"{look_id}_turn.mp4"
         out = RESULTS / name
         async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
-            done = False
-            if TURN_STYLE == "halves" and P.env("TURN_MODE", "turntable") != "orbit":
+            mirror = TURN_STYLE != "single" and P.env("TURN_MODE", "turntable") != "orbit"
+            if mirror:
                 try:
                     import imageio_ffmpeg  # noqa: F401
-                    done = await turn_halves(client, job, RESULTS / lk["file"], out)
                 except ImportError:
+                    mirror = False
                     print("\n  · 没装 imageio-ffmpeg，转一圈改成一次生成一整圈（pip install -r requirements.txt）", flush=True)
-            if not done:
+            if mirror:
+                await turn_mirror(client, job, RESULTS / lk["file"], out)
+            else:
                 out.write_bytes(await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频"))
         with _lock:
             db = db_load()

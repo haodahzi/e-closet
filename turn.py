@@ -1,13 +1,13 @@
-"""转一圈视频的拼接：两段半圈拼成一整圈。
+"""转一圈视频：只生成半圈，另外半圈用镜像拼出来。
 
-为什么要拼：视频模型离首帧越远越容易走样，一整圈转回正面（270°→360°）时，
-脸已经离首帧很远，常常变形。拆成两段，每段都从同一张正面照片开始只转半圈：
+为什么：视频模型离首帧越远越容易走样，一整圈转回正面（270°→360°）时脸已经离首帧很远，常常变形，
+停下来的姿势也和照片对不上。
 
-  A：照片 → 背面（正常生成）
-  B：镜像照片 → 背面（同一句指令，和 A 同方向转），再把画面镜像回来，就成了“往另一边转”
-
-播放 A，再倒着播 B：正面 → 背面 → 正面，方向连续。最后转回正面那一段是 B 的开头几帧，
-离首帧很近，脸和照片一致，最后一帧就是照片本身。
+做法（只花一段视频的钱）：
+  A = 模型生成的半圈：照片 → 背面（离首帧最远也只有 180°）
+  后半圈 = A 的每一帧沿人的中轴左右镜像，倒着播：背面 → 正面，旋转方向和 A 连续
+最后转回正面那几帧来自 A 的开头（离照片最近），脸不走样；最后几帧再淡到 A 的第一帧，
+所以视频以照片本身结束，左右镜像带来的细节差异（头发分缝、单边口袋）也被淡掉。
 """
 import io
 
@@ -17,7 +17,7 @@ from PIL import Image, ImageOps
 THUMB = (72, 96)
 
 
-def read_frames(path, mirror=False, size=None):
+def read_frames(path):
     """解码视频。返回 (JPEG 帧列表, 小灰度图列表, 尺寸, fps)。帧存成 JPEG，不占太多内存。"""
     import imageio_ffmpeg
     gen = imageio_ffmpeg.read_frames(str(path))
@@ -27,71 +27,76 @@ def read_frames(path, mirror=False, size=None):
     frames, thumbs = [], []
     for raw in gen:
         im = Image.frombytes("RGB", (w, h), raw)
-        if mirror:
-            im = ImageOps.mirror(im)
-        if size and im.size != tuple(size):
-            im = im.resize(size)
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=95)
         frames.append(buf.getvalue())
         thumbs.append(np.asarray(im.convert("L").resize(THUMB), dtype=np.float32))
-    return frames, thumbs, (size or (w, h)), fps
+    return frames, thumbs, (w, h), fps
 
 
-def _mask(t):
-    return t < 200  # 白底上的人
+def axis(thumb):
+    """人的中轴（0–1）：白底上非白像素的平均横坐标。"""
+    xs = np.nonzero(thumb < 200)[1]
+    return float(xs.mean() + 0.5) / thumb.shape[1] if xs.size else 0.5
 
 
-def opposite_ways(ta, tb):
-    """A、B 是不是往相反方向转（B 已经镜像回来）。看转到侧面那一刻（大约 45% 处）的剪影：
-    方向相反时，B 的侧影是 A 的侧影左右翻过来的样子。分不清（剪影太对称）时算通过。"""
-    if len(ta) < 10 or len(tb) < 10:
-        return True
-    cx = np.nonzero(_mask(ta[0]))[1].mean() if _mask(ta[0]).any() else THUMB[0] / 2
-    cols = np.arange(THUMB[0])
-    src = np.clip(np.round(2 * cx - cols).astype(int), 0, THUMB[0] - 1)
-    iou = lambda a, b: (a & b).sum() / max((a | b).sum(), 1)
-    best_same = best_flip = 0
-    for f in (0.35, 0.45, 0.55):
-        a, b = _mask(ta[int(len(ta) * f)]), _mask(tb[int(len(tb) * f)])
-        best_same += iou(a, b)
-        best_flip += iou(a, b[:, src])
-    return not (best_same > best_flip + 0.06)
+def mirror_about(im, cx):
+    """沿人的中轴（cx，0–1）左右镜像，人留在原地。空出来的地方补白。"""
+    w = im.width
+    m = ImageOps.mirror(im)
+    shift = round((2 * cx - 1) * w)  # 图片中线镜像后人跑到 1-cx，挪回 cx
+    out = Image.new("RGB", im.size, (255, 255, 255))
+    out.paste(m, (shift, 0))
+    return out
 
 
-def seam(ta, tb):
-    """找接缝：A 后半段和 B 后半段里最像的一对帧（都应该是背面）。返回 (i, j)。"""
-    best, ij = None, (len(ta) - 1, len(tb) - 1)
-    for i in range(len(ta) // 2, len(ta)):
-        for j in range(len(tb) // 2, len(tb)):
-            # 差不多像的时候取更靠后的帧：尽量转到正背面再接
-            e = float(((ta[i] - tb[j]) ** 2).mean()) + 3.0 * ((len(ta) - 1 - i) / len(ta) + (len(tb) - 1 - j) / len(tb))
-            if best is None or e < best:
-                best, ij = e, (i, j)
-    return ij
+def _mirror_thumb(t, cx):
+    w = t.shape[1]
+    cols = np.arange(w)
+    src = np.clip(np.round(2 * cx * w - 1 - cols).astype(int), 0, w - 1)
+    return t[:, src]
 
 
-def stitch(fa, ta, fb, tb, size, fps, out, speed=1.4, fade=5):
-    """A[0..i] 接 B[j..0]，接缝处交叉淡化几帧，写成 H.264 mp4。返回帧数。"""
+def turn_point(thumbs, cx):
+    """后半段里最左右对称的一帧（正背面），从这里接上镜像的后半圈。"""
+    best, k = None, len(thumbs) - 1
+    for i in range(len(thumbs) // 2, len(thumbs)):
+        # 差不多对称时取更靠后的帧：尽量转到正背面
+        e = float(((thumbs[i] - _mirror_thumb(thumbs[i], cx)) ** 2).mean()) + 3.0 * (len(thumbs) - 1 - i) / len(thumbs)
+        if best is None or e < best:
+            best, k = e, i
+    return k
+
+
+def full_turn(frames, thumbs, size, fps, out, speed=1.25, fade=5, settle=8):
+    """半圈 → 一整圈，写成 H.264 mp4。返回帧数。"""
     import imageio_ffmpeg
-    i, j = seam(ta, tb)
-    a = fa[:i + 1]
-    b = fb[:j + 1][::-1]
-    k = min(fade, len(a) - 1, len(b) - 1)
     dec = lambda x: Image.open(io.BytesIO(x)).convert("RGB")
+    cx = axis(thumbs[0])
+    i = turn_point(thumbs, cx)
+    first = dec(frames[0])
     w = imageio_ffmpeg.write_frames(str(out), size, fps=fps * speed, codec="libx264", pix_fmt_out="yuv420p",
                                     quality=8, macro_block_size=2, output_params=["-movflags", "+faststart"])
     w.send(None)
     count = 0
-    for x in a[:len(a) - k]:  # 一帧一帧写，不把整段解码进内存
-        w.send(dec(x).tobytes())
+
+    def send(im):
+        nonlocal count
+        w.send(im.tobytes())
         count += 1
-    for n in range(k):
-        t = (n + 1) / (k + 1)
-        w.send(Image.blend(dec(a[len(a) - k + n]), dec(b[n]), t).tobytes())
-        count += 1
-    for x in b[k:]:
-        w.send(dec(x).tobytes())
-        count += 1
+
+    k = min(fade, i)
+    for n in range(i + 1 - k):  # 前半圈：原样
+        send(dec(frames[n]))
+    for n in range(k):  # 背面：从原画面淡到镜像画面
+        j = i + 1 - k + n
+        send(Image.blend(dec(frames[j]), mirror_about(dec(frames[i - n]), cx), (n + 1) / (k + 1)))
+    back = list(range(i - k, -1, -1))  # 后半圈：镜像倒放
+    for n, j in enumerate(back):
+        im = mirror_about(dec(frames[j]), cx)
+        left = len(back) - 1 - n
+        if left < settle:  # 最后几帧淡到第一帧（就是照片），以照片结束
+            im = Image.blend(im, first, 1 - left / settle)
+        send(im)
     w.close()
     return count
