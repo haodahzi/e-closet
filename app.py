@@ -977,6 +977,22 @@ def rename_item(item_id: str, body: Rename):
         return db["items"][item_id]
 
 
+class Order(BaseModel):
+    ids: List[str]
+
+
+@app.post("/api/items/order")
+def order_items(body: Order):
+    """整理衣柜里拖动换位置：按给的顺序记下每件的位置（只排给到的这几件）。"""
+    with _lock:
+        db = db_load()
+        for n, iid in enumerate(body.ids):
+            if iid in db["items"]:
+                db["items"][iid]["order"] = n
+        db_save(db)
+    return {"ok": True}
+
+
 @app.delete("/api/items/{item_id}")
 def delete_item(item_id: str):
     with _lock:
