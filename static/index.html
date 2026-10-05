@@ -226,6 +226,23 @@ button{cursor:pointer}
   .rail{padding:0 16px;justify-content:flex-start}
   .x{opacity:1}
 }
+/* ---------- 纽扣光标：只在有鼠标的电脑上 ---------- */
+html.btncur,html.btncur *{cursor:none!important}
+html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cursor:text!important}
+.cur{position:fixed;left:0;top:0;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;z-index:1000;opacity:0;transition:opacity .2s}
+.cur.in{opacity:1}
+.cur .b{width:100%;height:100%;display:block;transition:transform .35s cubic-bezier(.3,1.5,.5,1)}
+.cur.hover .b{transform:scale(1.35) rotate(45deg)}
+.cur.press .b{transform:scale(.82)}
+.cur.spin .b{animation:curspin .9s linear infinite}
+@keyframes curspin{from{transform:scale(1.2) rotate(0)}to{transform:scale(1.2) rotate(360deg)}}
+.cur .sew{opacity:0}
+.cur.sewn .sew{animation:cursew .95s ease forwards}
+.cur.sewn .b{animation:cursnap .5s cubic-bezier(.3,1.8,.5,1)}
+@keyframes cursew{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}
+@keyframes cursnap{from{transform:scale(1.25)}to{transform:scale(1)}}
+.curring{position:fixed;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:1.5px solid var(--accent);pointer-events:none;z-index:999;animation:curring .7s ease-out forwards}
+@keyframes curring{from{transform:scale(.6);opacity:.9}to{transform:scale(2.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -276,6 +293,13 @@ button{cursor:pointer}
 
 <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
 <div id="layer"></div>
+<div class="cur" id="cur" aria-hidden="true"><svg class="b" viewBox="0 0 22 22">
+  <defs><radialGradient id="pearl" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#F1ECE4"/><stop offset="1" stop-color="#D9D1C4"/></radialGradient></defs>
+  <circle cx="11" cy="11" r="10" fill="url(#pearl)" stroke="#B9B0A2" stroke-width=".8"/>
+  <circle cx="11" cy="11" r="7.2" fill="none" stroke="#CFC6B8" stroke-width=".7"/>
+  <g fill="#A79C8C"><circle cx="8.6" cy="8.6" r="1.25"/><circle cx="13.4" cy="8.6" r="1.25"/><circle cx="8.6" cy="13.4" r="1.25"/><circle cx="13.4" cy="13.4" r="1.25"/></g>
+  <g class="sew" stroke="#C9895B" stroke-width="1.1" stroke-linecap="round"><path d="M8.6 8.6 13.4 13.4M13.4 8.6 8.6 13.4"/></g>
+</svg></div>
 
 <script>
 const LABEL={person:'我的照片',shirt:'衬衫',pants:'裤子',belt:'腰带',shoes:'鞋子',hat:'帽子',accessory:'配饰'};
@@ -338,6 +362,7 @@ addEventListener('resize',fitPage);
 const isOn=i=>i.category==='accessory'?sel.accessories.includes(i.id):sel[i.category]===i.id;
 function wearIt(i){
   if(job)return;
+  curRing();
   if(i.category==='accessory'){
     const a=sel.accessories;
     if(a.includes(i.id))sel.accessories=a.filter(x=>x!==i.id);
@@ -714,12 +739,12 @@ function renderLooks(){
 let jobStart=0;
 async function follow(r){
   if(r.cached){viewing=r.look;render();return}
-  job=r.job;jobStart=Date.now();render();
+  job=r.job;jobStart=Date.now();render();curBusy(true);
   while(job.status==='running'){
     await new Promise(ok=>setTimeout(ok,900));
     job=await api('/api/jobs/'+job.id);renderStage();
   }
-  const done=job;job=null;
+  const done=job;job=null;curBusy(false,done.status!=='error');
   if(done.status==='error'){say(done.error);render();return}
   viewing=done.look;estKey='';await refresh();
 }
@@ -823,6 +848,38 @@ $('open-photos').addEventListener('click',openDrawer);
 addEventListener('keydown',e=>{if(e.key==='Escape'){drawerOpen=false;$('layer').replaceChildren()}});
 
 refresh().catch(e=>say(e.message));
+
+/* ---------- 纽扣光标：一颗四眼衬衫扣，轻轻跟着鼠标；划过能点的东西转一下，生成时旋转，好了“扣上” ---------- */
+const CUR=$('cur'), curOn=matchMedia('(hover:hover) and (pointer:fine)').matches;
+let curX=0,curY=0,curTX=0,curTY=0;
+function curRing(){if(!curOn)return;const r=h('div',{class:'curring',style:`left:${curX}px;top:${curY}px`});document.body.append(r);setTimeout(()=>r.remove(),750)}
+function curBusy(on,ok){
+  if(!curOn)return;
+  CUR.classList.toggle('spin',on);
+  if(on){CUR.classList.remove('hover','sewn');return}
+  if(ok){void CUR.offsetWidth;CUR.classList.add('sewn');curRing();setTimeout(()=>CUR.classList.remove('sewn'),1000)}
+}
+if(curOn){
+  document.documentElement.classList.add('btncur');
+  const slow=!matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const clickable='button:not(:disabled),a[href],label,select,summary,[role=button],input[type=checkbox],input[type=radio]';
+  addEventListener('pointermove',e=>{
+    if(e.pointerType!=='mouse')return;
+    curTX=e.clientX;curTY=e.clientY;
+    if(!CUR.classList.contains('in')){curX=curTX;curY=curTY;CUR.classList.add('in')}
+    const t=e.target instanceof Element?e.target:null;
+    CUR.style.visibility=t&&t.closest('input:not([type=checkbox]):not([type=radio]),textarea')?'hidden':'';   /* 打字的地方用系统的文字光标 */
+    CUR.classList.toggle('hover',!!(t&&t.closest(clickable))&&!CUR.classList.contains('spin'));
+  },{passive:true});
+  document.documentElement.addEventListener('mouseleave',()=>CUR.classList.remove('in'));
+  addEventListener('blur',()=>CUR.classList.remove('in'));
+  addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')CUR.classList.add('press')});
+  addEventListener('pointerup',()=>CUR.classList.remove('press'));
+  (function curLoop(){  /* 有一点点滞后，像挂在线上 */
+    const k=slow?.3:1;curX+=(curTX-curX)*k;curY+=(curTY-curY)*k;
+    CUR.style.transform=`translate(${curX.toFixed(1)}px,${curY.toFixed(1)}px)`;requestAnimationFrame(curLoop);
+  })();
+}
 </script>
 </body>
 </html>
