@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>e·closet</title>
+<title>D-Closet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -38,7 +38,7 @@ button{cursor:pointer}
 .closet{min-width:0;display:flex;flex-direction:column;gap:14px}
 
 /* ---------- 衣杆 ---------- */
-.rack{position:relative;padding-top:30px}
+.rack{position:relative;padding-top:30px;zoom:var(--rz,1)}
 .rod{position:absolute;left:18px;right:18px;top:36px;height:9px;border-radius:5px;z-index:0;
   background:linear-gradient(#fbfbfb 0%,#d6d6d6 30%,#9b9b9b 55%,#c9c9c9 80%,#efefef 100%);box-shadow:0 3px 5px rgba(0,0,0,.14)}
 .rod::before,.rod::after{content:"";position:absolute;top:-9px;width:16px;height:27px;border-radius:4px;
@@ -157,16 +157,16 @@ button{cursor:pointer}
 .mirrorcol{min-width:0;display:flex}
 .mirrorcol .stage{aspect-ratio:auto;height:100%;flex:1}
 .stage{position:relative;aspect-ratio:3/4;width:100%;border-radius:var(--r-lg);overflow:hidden;background:#FFFFFF;perspective:1400px;touch-action:pan-y;user-select:none}
-.model{position:absolute;inset:7% 9% 9%;transform-style:preserve-3d;transition:transform .8s var(--ease)}
+.model{position:absolute;inset:4% 5% 4%;transform-style:preserve-3d;transition:transform .8s var(--ease)}
 .breathe{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.006)}}
 .frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .45s ease}
 .frame.show{opacity:1}
 /* 色卡：仿色卡样式，浮在照片左侧，不挤占人像的位置 */
-.palette{position:absolute;left:5%;top:9%;width:15%;min-width:60px;max-width:92px;display:flex;flex-direction:column;gap:10px;z-index:2;pointer-events:none}
+.palette{position:absolute;left:4%;top:8%;width:11%;min-width:46px;max-width:68px;display:flex;flex-direction:column;gap:10px;z-index:2;pointer-events:none}
 .pchip{background:#fff;box-shadow:0 2px 7px rgba(40,30,20,.10);display:block;opacity:0;transform:translateX(-6px);animation:pin .5s var(--ease) forwards}
 .pchip .swatch{aspect-ratio:1.25/1}
-.pchip .lb{padding:4px 6px 5px;font:500 8.5px/1.35 var(--sans);color:#3a3936;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
+.pchip .lb{padding:3px 5px 4px;font:500 7.5px/1.35 var(--sans);color:#3a3936;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
 .pchip .lb .en{color:var(--soft)}
 @keyframes pin{to{opacity:1;transform:none}}
 .frame.vid{transition:opacity .35s ease}
@@ -213,7 +213,7 @@ button{cursor:pointer}
 .photo .x{opacity:1;top:6px;right:6px}
 .addp{display:flex;align-items:center;justify-content:center;aspect-ratio:3/4;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:13px;width:100%}
 
-@media (max-width:1300px){.bottom{grid-template-columns:1fr}}
+@media (max-width:1100px){.bottom{grid-template-columns:1fr}}
 @media (max-width:1000px){
   .mirrorcol .stage{aspect-ratio:3/4;height:auto}
   .shelfwrap{grid-template-columns:1fr}
@@ -231,7 +231,7 @@ button{cursor:pointer}
 </head>
 <body>
 <header class="top">
-  <div class="brand">e<i>·</i>closet</div>
+  <div class="brand">D<i>-</i>Closet</div>
   <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
   <button class="link" id="open-photos">我的照片</button>
 </header>
@@ -323,7 +323,16 @@ async function refresh(){
   if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){$('demo').hidden=!S.config.demo;renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer()}
+function render(){$('demo').hidden=!S.config.demo;renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
+/* 整个界面放在一屏里：电脑上窗口不够高时，把衣杆整体缩小到刚好放下，不用往下滚 */
+function fitPage(){
+  const r=document.querySelector('.rack'), de=document.documentElement;
+  if(innerWidth<=1000){r.style.removeProperty('--rz');return}
+  r.style.setProperty('--rz',1);
+  const over=de.scrollHeight-innerHeight;
+  if(over>0){const hgt=r.offsetHeight;r.style.setProperty('--rz',Math.max(.55,(hgt-over-2)/hgt).toFixed(3))}
+}
+addEventListener('resize',fitPage);
 
 /* ---------- 衣杆：平时侧挂，划过的那件转成正面 ---------- */
 const isOn=i=>i.category==='accessory'?sel.accessories.includes(i.id):sel[i.category]===i.id;
@@ -509,12 +518,30 @@ function personBox(src,nw,nh){
 }
 /* 视频和照片对齐：量出视频第一帧里人的大小和位置，和照片里的人对上（头顶、脚底、中心线都重合），
    不管视频模型有没有放大、裁切或补边，转身前后人都在原地、一样大，无缝衔接 */
+/* 试穿照片按人来摆：头顶到脚底占满舞台高度的 94%，左右居中（照片是白底，四周多出来的白边不占地方） */
+function fitStill(){
+  const f=still(), box=$('frames');
+  if(!f||!f.naturalWidth)return null;
+  const W=box.clientWidth,H=box.clientHeight, ri=f.naturalWidth/f.naturalHeight;
+  let iw=Math.min(W,H*ri), ih=iw/ri, ix=(W-iw)/2, iy=(H-ih)/2;
+  if(f.dataset.fit){
+    if(f._box===undefined){try{f._box=personBox(f,f.naturalWidth,f.naturalHeight)}catch(e){f._box=null}}
+    const b=f._box;
+    if(b&&!b.cut){
+      let nh=H*.94/(b.y1-b.y0);
+      nh=Math.min(nh,W*.92/(b.w*ri),ih*2.2);   /* 人不能宽过舞台，也别放得太大糊掉 */
+      ih=nh;iw=nh*ri;iy=H*.03+(H*.94-(b.y1-b.y0)*ih)/2-b.y0*ih;ix=W/2-b.cx*iw;
+    }
+  }
+  f._rect={ix,iy,iw,ih};
+  Object.assign(f.style,{left:`${ix}px`,top:`${iy}px`,width:`${iw}px`,height:`${ih}px`,objectFit:'fill'});
+  return f._rect;
+}
 function alignVideo(){
-  const v=vid(), f=still(), box=$('frames');
+  const v=vid(), f=still();
   if(!v||!f||!v.videoWidth||!f.naturalWidth)return;
-  const W=box.clientWidth,H=box.clientHeight, ri=f.naturalWidth/f.naturalHeight, rv=v.videoWidth/v.videoHeight;
-  const iw=Math.min(W,H*ri), ih=iw/ri, ix=(W-iw)/2, iy=(H-ih)/2;   /* 照片实际显示的位置和大小 */
-  if(f._box===undefined){try{f._box=personBox(f,f.naturalWidth,f.naturalHeight)}catch(e){f._box=null}}
+  const r=f._rect||fitStill(), ri=f.naturalWidth/f.naturalHeight, rv=v.videoWidth/v.videoHeight, box=$('frames');
+  const {ix,iy,iw,ih}=r, W=box.clientWidth, H=box.clientHeight;   /* 照片实际显示的位置和大小 */
   let vw,vh,vl,vt;
   if(f._box&&v._box){
     const fb=f._box, vb=v._box;
@@ -522,13 +549,13 @@ function alignVideo(){
     else{vh=(fb.y1-fb.y0)*ih/(vb.y1-vb.y0);vw=vh*rv}
     vt=iy+fb.y0*ih-vb.y0*vh; vl=ix+fb.cx*iw-vb.cx*vw;
   }else{  /* 量不出来时：按“照片居中补边”摆 */
-    vw=rv>ri?ih*rv:iw; vh=rv>ri?ih:iw/rv; vl=W/2-vw/2; vt=H/2-vh/2;
+    vw=rv>ri?ih*rv:iw; vh=rv>ri?ih:iw/rv; vl=ix+iw/2-vw/2; vt=iy+ih/2-vh/2;
   }
   const b=v._box||{};
   Object.assign(v.style,{left:`${vl}px`,top:`${vt}px`,width:`${vw}px`,height:`${vh}px`,objectFit:'fill',
     clipPath:b.bt||b.bb?`inset(${(b.bt||0)*100}% 0 ${(b.bb||0)*100}% 0)`:''});  /* 视频模型自己加的黑条剪掉，露出下面的白底 */
 }
-addEventListener('resize',alignVideo);
+addEventListener('resize',()=>{fitStill();alignVideo()});
 /* 分析视频：先量第一帧里人的位置（马上用来对齐），再找“转回正面”的那一帧：后半段里和第一帧最像的那一刻，之后的画面不播 */
 async function analyzeTurn(src,onBox){
   const v=document.createElement('video');v.muted=true;v.preload='auto';v.src=src;
@@ -558,7 +585,8 @@ function renderStage(){
   const key=JSON.stringify([list,pal&&pal.map(c=>c.hex),hasVid&&viewing.video]);
   if(key!==stageKey){
     stageKey=key;
-    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false'})));
+    $('frames').replaceChildren(...list.map((u,n)=>h('img',{class:'frame'+(n===0?' show':''),src:u,alt:'试穿效果',draggable:'false','data-fit':viewing&&!peek?'1':null})));
+    const f0=still();if(f0){const go=()=>{fitStill();alignVideo()};f0.complete&&f0.naturalWidth?go():f0.addEventListener('load',go,{once:true})}
     const pk=pal?pal.map(c=>c.hex).join():'', old=st.querySelector('.palette');
     if(!old||old.dataset.k!==pk){if(old)old.remove();
     if(pal)st.append(h('div',{class:'palette','data-k':pk,'aria-label':'这身的配色'},pal.map((c,n)=>h('div',{class:'pchip',style:`animation-delay:${n*70}ms`},
@@ -570,7 +598,6 @@ function renderStage(){
       v.addEventListener('ended',endTurn);
       v.addEventListener('timeupdate',()=>{if(!dragging&&!v.paused&&v.currentTime>=turnEnd(v))endTurn()});
       v.addEventListener('loadedmetadata',alignVideo);
-      if(still())still().addEventListener('load',alignVideo);
       $('frames').append(v);
       let boxReady;const ready=new Promise(ok=>boxReady=ok);
       const setBox=b=>{v._box=b;alignVideo();boxReady()};
