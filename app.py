@@ -897,14 +897,18 @@ def delete_item(item_id: str):
 
 
 def turn_prompt():
-    she = "she" if P.env("GENDER", "woman") == "woman" else "he"
-    her = "her" if she == "she" else "his"
-    return (f"The same person stands facing the camera, then slowly turns around in place a full 360 degrees at an even, "
-            f"elegant pace, showing {her} side, back and other side, and comes back to face the camera and stands "
-            "still for the final moment. Feet stay on the same spot; arms relaxed. Fixed camera, full body from head to "
-            "feet always in frame, on a pure white seamless studio background (#FFFFFF) the whole time, same soft lighting. The outfit keeps exactly the same colours, pattern, "
-            "fit and the way the shirt is worn; fabric moves naturally with the turn. No walking, no cuts, no zoom, "
-            "no extra people, no text.")
+    """转一圈的指令（中文，即梦视频模型对中文理解更好）。
+    TURN_MODE=turntable（默认）：360° 转台展示，人像雕塑一样定住姿势、整体匀速转一圈；
+    TURN_MODE=orbit：人完全不动，镜头环绕人物一圈（环绕运镜），有些模型这样更不容易变形。"""
+    keep = ("人物全程保持同一个站姿，像静止的雕塑：手臂、手、腿、脚、头和表情都完全不动，不迈步、不摆手、不扭腰、不转头，"
+            "身体比例和五官不变形；服装的颜色、条纹格纹、版型、塞法和配饰全程保持一致，布料只随旋转轻微自然摆动。"
+            "纯白无缝影棚背景（#FFFFFF），柔和均匀的光线，人物全身始终完整在画面中央，脚下只有淡淡的自然阴影。"
+            "不切镜头、不推拉变焦、不出现其他人物或文字。")
+    if P.env("TURN_MODE", "turntable") == "orbit":
+        return ("360度环绕运镜（orbit shot）：画面中的人物完全静止不动，相机以人物为圆心、保持同样的高度和距离，"
+                "匀速水平环绕人物一整圈，依次拍到正面、侧面、背面、另一侧，最后回到正面停住。" + keep)
+    return ("360度转台展示（turntable spin）：人物站在一个看不见的旋转台上，以身体中轴为轴心，整个人作为一个整体匀速顺时针旋转一整圈，"
+            "依次露出正面、侧面、背面、另一侧，最后回到正面并停住。相机固定不动。" + keep)
 
 
 async def run_turn(job, look_id):

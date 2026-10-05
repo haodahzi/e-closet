@@ -318,7 +318,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                     "content": [{"type": "text", "text": prompt}] +
                                [{"type": "image_url", "image_url": {"url": pic}, "role": role} for role in t["frames"]],
                     "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "duration": t["secs"],
-                    "camera_fixed": True, "watermark": False, **t["extra"]}
+                    "camera_fixed": env("TURN_MODE", "turntable") != "orbit", "watermark": False, **t["extra"]}
             r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
             j = r.json() if "json" in r.headers.get("content-type", "") else {}
             if r.status_code < 400 and j.get("id"):
