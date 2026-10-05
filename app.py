@@ -272,8 +272,6 @@ def ensure_cut(it):
         (ITEMS / it["cut"]).unlink(missing_ok=True)
     it["cut"], it["cutv"] = None, CUT_VERSION
     it.pop("fit", None)
-    if out is not None and it["category"] == "belt" and out.width > out.height * 1.2:
-        out = out.rotate(90, expand=True)  # 横拍的腰带转成竖的，才能挂在钩子上
     if out is not None:
         it["cut"] = f"{it['id']}_cut{CUT_VERSION}.png"
         out.save(ITEMS / it["cut"])
@@ -317,8 +315,9 @@ WEAR_EN = {
     "collar": {"closed": "The shirt is buttoned all the way up to the collar.",
                "open": "The top shirt button is undone, collar open, no tie."},
 }
-KEEP = ("Keep the person's face, hair, skin tone, body shape, pose, camera framing, background and lighting "
-        "exactly as in image 1.")
+WHITE = ("Background: a pure white seamless studio backdrop (#FFFFFF) filling the whole frame, soft even light, "
+         "only a faint natural shadow under the feet; nothing else in the background.")
+KEEP = ("Keep the person's face, hair, skin tone, body shape, pose and camera framing exactly as in image 1. " + WHITE)
 
 
 def named(item, fallback):
@@ -376,7 +375,7 @@ def portrait_prompts():
     pose = ("Full body from head to feet, standing upright facing the camera, arms relaxed and slightly away from "
             "the body, hands visible, feet slightly apart. Long hair placed behind the shoulders so the neck, "
             "collarbones and shoulders are visible.")
-    scene = ("Plain light warm-grey seamless studio background, soft even daylight from the front, no props, "
+    scene = (WHITE + " Soft even daylight from the front, no props, "
              "photorealistic, sharp focus, natural skin texture.")
     a = f"Image 1 is a photo of a {who}. Create a clean full-body studio photo. {keep} {pose} " \
         f"Wearing {base}. {scene}"
@@ -388,7 +387,7 @@ def accessory_prompts(accs):
     refs = ", ".join(f"the {(it.get('name') or '').strip() or 'accessory'} from image {i + 2}" for i, it in enumerate(accs))
     a = (f"Image 1 is a photo of a person. Add these accessories to the person: {refs}. Each one is worn where it "
          "naturally belongs, at realistic scale, matching the reference's colour, material and details. Change "
-         "nothing else: face, body, pose, clothing, background and lighting stay identical to image 1. "
+         "nothing else: face, body, pose, clothing and lighting stay identical to image 1, on a pure white background. "
          "Output one photorealistic photo.")
     b = (f"Styling photograph: the person from image 1, unchanged, now also wearing {refs}, placed naturally and "
          "at realistic scale. Everything else stays identical to image 1.")
@@ -593,15 +592,62 @@ async def ensure_descs(ids):
         db_save(db)
 
 
-def fix_prompts(pieces):
-    """只修不对的那几件：把结果图里的鞋 / 腰带 / 帽子 / 配饰换成参考图里的，其他一律不动。"""
-    what = "; ".join(f"the {PIECE_EN.get(c, (it.get('name') or 'accessory'))} must become exactly the one in image {n + 2}"
-                     + (f" ({it['desc']})" if it.get("desc") else "") for n, (c, it) in enumerate(pieces))
-    a = (f"Image 1 is a finished outfit photo. Change only these items: {what}. Keep everything else in image 1 "
-         "pixel-identical: the person, face, hair, body, pose, all other clothes, background and lighting. "
+PART_ZH = {"shirt": "衬衫", "pants": "裤子", "belt": "腰带", "shoes": "鞋子", "hat": "帽子", "accessory": "配饰",
+           "face": "长相", "wear": "穿法", "background": "白底"}
+
+
+def fix_inputs(sel, parts, note="", snap=None):
+    """哪里不对修哪里：按要修的部分挑参考图、写指令。图 1 是要修的结果图，后面依次是参考图。
+    sel 是这身的选择（衬衫/裤子…的 id、穿法）；单品已被删掉时用搭配里存的那份图。"""
+    items = db_load()["items"]
+    saved = {p["category"]: p for p in (snap or {}).get("pieces", [])}
+    imgs, todo = [], []
+
+    def ref(cat, iid):
+        it = items.get(iid or "")
+        if it:
+            return ITEMS / it["file"], it
+        if cat in saved:
+            return RESULTS / saved[cat]["file"], saved[cat]
+        return None
+
+    for part in parts:
+        if part in ("shirt", "pants", "belt", "shoes", "hat"):
+            got = ref(part, sel.get(f"{part}_id"))
+            if got:
+                imgs.append(got[0])
+                d = f" ({got[1]['desc']})" if got[1].get("desc") else ""
+                keep = " Keep how it is worn (tucked/untucked, sleeves, collar) as it is now." if part == "shirt" else ""
+                todo.append(f"the {PIECE_EN[part]} must become exactly the one in image {len(imgs) + 1}{d}, same colour, "
+                            f"pattern scale and details.{keep}")
+        elif part == "accessory":
+            for iid in sel.get("accessory_ids") or []:
+                it = items.get(iid)
+                if it:
+                    imgs.append(ITEMS / it["file"])
+                    todo.append(f"the {(it.get('name') or 'accessory')} must look exactly like image {len(imgs) + 1}.")
+        elif part == "face":
+            person = items.get(sel.get("person_id") or "")
+            path = ITEMS / person["file"] if person else (RESULTS / snap["person_file"] if snap and snap.get("person_file")
+                                                          else None)
+            if path:
+                imgs.append(path)
+                todo.append(f"the face, hairstyle, skin tone and body shape must be exactly those of the person in "
+                            f"image {len(imgs) + 1}.")
+        elif part == "wear" and sel.get("shirt_id"):
+            todo.append("fix how the shirt is worn: " + wear_text({k: sel.get(k) or d for k, d in
+                                                                  (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))}))
+        elif part == "background":
+            todo.append("replace the background with a pure white seamless studio backdrop (#FFFFFF), keeping only a "
+                        "faint natural shadow under the feet.")
+    if note.strip():
+        todo.append(f"Also: {note.strip()[:200]}")
+    what = " ".join(todo)
+    a = (f"Image 1 is a finished outfit photo. Correct only the following, nothing else: {what} Keep everything else "
+         "in image 1 pixel-identical: the person, face, pose, all other clothes and lighting; the background stays pure white. "
          "Output one photorealistic photo.")
-    b = f"Same photo as image 1, with only these corrections: {what}. Nothing else changes."
-    return [a, b]
+    b = f"Same photo as image 1 with only these corrections: {what} Nothing else changes."
+    return imgs, [a, b], bool(todo)
 
 
 JOBS = {}
@@ -627,7 +673,6 @@ async def run_job(job, req: TryOn, plan):
         checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
         wear = wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) if req.shirt_id else ""
         items = db_load()["items"]
-        ids = {"shoes": [req.shoes_id], "belt": [req.belt_id], "hat": [req.hat_id], "accessory": req.accessory_ids}
         try:  # 先给还没有文字描述的单品补上描述，再按最新描述写提示词（缓存键不受影响）
             job.update(step="读懂每件单品")
             await ensure_descs([req.shirt_id, req.pants_id, req.belt_id, req.shoes_id, req.hat_id, *req.accessory_ids])
@@ -661,16 +706,15 @@ async def run_job(job, req: TryOn, plan):
                     break
                 bad = [k for k in P.CHECKS if not r[k]]
                 if all(k in P.FIXABLE for k in bad):
-                    # 只有鞋 / 腰带 / 帽子 / 配饰不对：只修这几件，不重做整身
-                    pieces = [(P.FIXABLE[k], items[i]) for k in bad for i in ids[P.FIXABLE[k]] if i in items]
-                    if pieces:
-                        job.update(step="只修正" + "、".join({"shoes": "鞋子", "belt": "腰带", "hat": "帽子",
-                                                            "accessory": "配饰"}[c] for c in dict(pieces)))
+                    # 只是某几处不对（衬衫/裤子/鞋/腰带/帽子/配饰/长相/穿法）：只修这几处，不重做整身
+                    parts = list(dict.fromkeys(P.FIXABLE[k] for k in bad))
+                    refs, prompts, ok = fix_inputs(req.model_dump(), parts)
+                    if ok:
+                        job.update(step="只修正" + "、".join(PART_ZH[x] for x in parts))
                         tmp = RESULTS / f"_fix_{uuid.uuid4().hex}.jpg"
                         im.save(tmp, quality=95)
                         try:
-                            fixed = await fetch_image(client, await P.EDIT["seedream"](
-                                client, [tmp] + [ITEMS / it["file"] for _, it in pieces], fix_prompts(pieces)))
+                            fixed = await fetch_image(client, await P.EDIT["seedream"](client, [tmp] + refs, prompts))
                         finally:
                             tmp.unlink(missing_ok=True)
                         r2 = await judge(client, fixed)
@@ -688,7 +732,7 @@ async def run_job(job, req: TryOn, plan):
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
                 o = db["looks"][old]
-                for f in {o["file"], *o.get("turn", []), o.get("video"), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
+                for f in {o["file"], *o.get("history", []), *o.get("turn", []), o.get("video"), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
                     (RESULTS / f).unlink(missing_ok=True)
                 del db["looks"][old]
             db["looks"][look_id] = look
@@ -724,6 +768,7 @@ def state():
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
+                       "fix_cost": 0 if MOCK else P.price("edit", "seedream"),
                        "turn_cost": 0 if MOCK else P.price("video", "seedance")}}
 
 
@@ -800,7 +845,7 @@ def turn_prompt():
     return (f"The same person stands facing the camera, then slowly turns around in place a full 360 degrees at an even, "
             f"elegant pace, showing {her} side, back and other side, and comes back to face the camera and stands "
             "still for the final moment. Feet stay on the same spot; arms relaxed. Fixed camera, full body from head to "
-            "feet always in frame, same background and lighting. The outfit keeps exactly the same colours, pattern, "
+            "feet always in frame, on a pure white seamless studio background (#FFFFFF) the whole time, same soft lighting. The outfit keeps exactly the same colours, pattern, "
             "fit and the way the shirt is worn; fabric moves naturally with the turn. No walking, no cuts, no zoom, "
             "no extra people, no text.")
 
@@ -853,13 +898,77 @@ async def make_turn(look_id: str):
     return {"cached": False, "job": job}
 
 
+class Fix(BaseModel):
+    parts: List[str] = []
+    note: str = ""
+
+
+async def run_fix(job, look_id, fix: Fix):
+    try:
+        lk = db_load()["looks"][look_id]
+        refs, prompts, ok = fix_inputs(lk.get("sel") or {}, fix.parts, fix.note, snap=lk)
+        if not ok:
+            raise P.GenError("没说要修哪里。勾选不对的部分，或者写一句哪里不对。")
+        job.update(step="修正" + "、".join(PART_ZH.get(x, x) for x in fix.parts) if fix.parts else "按说明修正")
+        async with httpx.AsyncClient(timeout=P.timeout()) as client:
+            im = await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts))
+        name = f"{look_id}_f{int(time.time())}.jpg"
+        im.save(RESULTS / name, quality=95)
+        with _lock:
+            db = db_load()
+            cur = db["looks"].get(look_id)
+            if not cur:
+                (RESULTS / name).unlink(missing_ok=True)
+                raise P.GenError("这套搭配已经被删除。")
+            cur.setdefault("history", []).append(cur["file"])  # 留着上一版，修坏了可以撤销
+            if cur.get("video"):
+                (RESULTS / cur.pop("video")).unlink(missing_ok=True)  # 旧的转身视频对不上了
+            cur["file"], cur["created"] = name, time.time()
+            db_save(db)
+            job.update(status="done", look=cur)
+    except P.GenError as e:
+        log_error("run_fix", e)
+        job.update(status="error", error=str(e))
+    except Exception as e:
+        log_error("run_fix", e)
+        job.update(status="error", error=friendly(e))
+
+
+@app.post("/api/looks/{look_id}/fix")
+async def fix_look(look_id: str, fix: Fix):
+    """你发现哪里不对，就只修哪里：勾选部分 + 一句说明。"""
+    if not db_load()["looks"].get(look_id):
+        raise HTTPException(404, "这套搭配已经被删除。")
+    if MOCK or not P.ready("seedream"):
+        raise HTTPException(400, "修一下要用即梦，.env 里还没填 ARK_API_KEY。")
+    job = {"id": uuid.uuid4().hex[:12], "status": "running", "step": "排队中", "step_index": 0, "steps": ["修正"]}
+    JOBS[job["id"]] = job
+    asyncio.create_task(run_fix(job, look_id, fix))
+    return {"cached": False, "job": job}
+
+
+@app.post("/api/looks/{look_id}/undo")
+def undo_fix(look_id: str):
+    with _lock:
+        db = db_load()
+        lk = db["looks"].get(look_id)
+        if not lk or not lk.get("history"):
+            raise HTTPException(400, "没有可以撤销的修改。")
+        (RESULTS / lk["file"]).unlink(missing_ok=True)
+        if lk.get("video"):
+            (RESULTS / lk.pop("video")).unlink(missing_ok=True)
+        lk["file"], lk["created"] = lk["history"].pop(), time.time()
+        db_save(db)
+        return lk
+
+
 @app.delete("/api/looks/{look_id}")
 def delete_look(look_id: str):
     with _lock:
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            for f in {lk["file"], *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
+            for f in {lk["file"], *lk.get("history", []), *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
                 (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}

@@ -222,7 +222,7 @@ button{cursor:pointer}
       <div class="caption" id="caption" aria-live="polite"></div>
     </div>
     <div class="shelfwrap" id="shelfwrap" aria-label="鞋和配饰">
-      <span class="shelflabel">鞋 · 配饰</span>
+      <span class="shelflabel">鞋 · 腰带 · 配饰</span>
       <div class="shelf" id="shelf"></div>
       <div class="ledge"></div>
     </div>
@@ -318,7 +318,7 @@ async function remove(i){
   if(!confirm(`把“${nameOf(i)}”从衣橱里拿走？已经生成的试穿照不受影响。`))return;
   try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}
 }
-const frontId=()=>hovered&&item(hovered)&&['shirt','pants','belt'].includes(item(hovered).category)?hovered:null;
+const frontId=()=>hovered&&item(hovered)&&['shirt','pants'].includes(item(hovered).category)?hovered:null;
 function caption(){
   if(beltNote){beltNote=false;$('caption').replaceChildren(h('b',{},'系上腰带'),h('span',{},'已改成“塞进裤子”，腰带才露得出来；想放在外面可以再改回来'));return}
   const f=frontId()?item(frontId()):hovered&&item(hovered)?item(hovered):null;
@@ -380,7 +380,7 @@ function hangEl(i,n){
 }
 let railKey='';
 function renderRail(){
-  const list=[...of('shirt'),...of('pants'),...of('belt')];
+  const list=[...of('shirt'),...of('pants')];
   const rail=$('rail'), key=list.map(i=>i.id+(i.cut||'')+i.name).join()+S.config.demo;
   if(key===railKey){  /* 只是穿上/脱下：不重画，免得打断摆动 */
     rail.querySelectorAll('.hang[data-id]').forEach(e=>{const i=item(e.dataset.id);e.classList.toggle('on',isOn(i));
@@ -397,7 +397,7 @@ $('rackadd').addEventListener('click',()=>pickFiles('shirt'));
 /* Looks 用滚轮也能左右滑 */
 $('looks').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){e.currentTarget.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 function renderShelf(){
-  const list=[...of('shoes'),...of('hat'),...of('accessory')];
+  const list=[...of('shoes'),...of('belt'),...of('hat'),...of('accessory')];
   $('shelf').replaceChildren(...list.map(i=>{
     const el=h('div',{class:'thing'+(isOn(i)?' on':''),'data-id':i.id},
       h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),onclick:()=>wearIt(i)},
@@ -453,6 +453,8 @@ function renderStage(){
     acts.append(b);
     acts.append(viewing.video?h('button',{onclick:()=>playTurn()},'转一圈'):
       h('button',{title:'生成一段原地转身一周的视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:makeTurn},'转一圈'));
+    if(!viewing.demo)acts.append(h('button',{title:'哪里不对就只修哪里',onclick:fixSheet},'修一下'));
+    if(viewing.history&&viewing.history.length)acts.append(h('button',{onclick:undoFix},'撤销修改'));
     acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
     st.append(acts);
   }
@@ -498,14 +500,14 @@ function estimate(){
   },200);
 }
 function pointTo(cat){
-  const el=['shoes','hat','accessory'].includes(cat)?$('shelfwrap'):$('rail');
+  const el=['shoes','belt','hat','accessory'].includes(cat)?$('shelfwrap'):$('rail');
   el.scrollIntoView({behavior:'smooth',block:'center'});
   if(el.id==='shelfwrap'){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),900)}
   if(['shoes','hat','belt'].includes(cat)&&!of(cat).length)pickFiles(cat);
 }
 function renderFit(){
   const chip=(cat,i,drop)=>i?h('button',{class:'piece has',title:'脱下',onclick:()=>{if(!job)drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i))):
-    h('button',{class:'piece none',title:cat==='shoes'?'鞋子在衣杆下面的鞋架上':'在上面的衣杆上挑',onclick:()=>pointTo(cat)},h('i',{class:'ph'}),h('span',{},cat==='shirt'?'挑一件衬衫':cat==='shoes'||cat==='hat'?LABEL[cat]+' ↑ 鞋架':cat==='belt'?'腰带 ↑ 衣杆':LABEL[cat]));
+    h('button',{class:'piece none',title:cat==='shoes'?'鞋子在衣杆下面的鞋架上':'在上面的衣杆上挑',onclick:()=>pointTo(cat)},h('i',{class:'ph'}),h('span',{},cat==='shirt'?'挑一件衬衫':cat==='shoes'||cat==='hat'?LABEL[cat]+' ↑ 鞋架':cat==='belt'?'腰带 ↑ 鞋架':LABEL[cat]));
   const drop=k=>()=>{sel[k]=null;viewing=null;keep();render()};
   const gone=viewing&&viewing.pieces?viewing.pieces.filter(p=>{const q=viewing.sel||{};
     const id=p.category==='accessory'?null:q[p.category+'_id'];return p.category==='accessory'?false:!item(id)}):[];
@@ -556,6 +558,34 @@ async function generate(force=false){
   if(job)return;say('');
   try{await follow(await api('/api/tryon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body(force))}))}
   catch(e){job=null;say(e.message);render()}
+}
+/* 修一下：勾选不对的部分 + 一句说明，只修这些地方 */
+function fixSheet(){
+  const q=viewing.sel||{}, opts=[];
+  for(const k of['shirt','pants','belt','shoes','hat'])if(q[k+'_id'])opts.push([k,LABEL[k]]);
+  if((q.accessory_ids||[]).length)opts.push(['accessory','配饰']);
+  opts.push(['face','长相（脸和发型）']);
+  if(q.shirt_id)opts.push(['wear','穿法（塞/放、袖子、领口）']);
+  opts.push(['background','白底']);
+  const on=new Set();
+  const cats=h('div',{class:'cats'}), paint=()=>cats.replaceChildren(...opts.map(([k,v])=>h('button',{'aria-pressed':String(on.has(k)),onclick:()=>{on.has(k)?on.delete(k):on.add(k);paint()}},v)));
+  paint();
+  const note=h('input',{class:'field',maxlength:200,placeholder:'哪里不对？比如“鞋带应该是红色的”“袖子要卷起来”（可选）'});
+  const close=()=>$('layer').replaceChildren();
+  const ok=h('button',{class:'btn dark',async onclick(){
+    if(!on.size&&!note.value.trim()){note.focus();return}
+    close();say('');
+    try{await follow(await api(`/api/looks/${viewing.id}/fix`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parts:[...on],note:note.value})}))}
+    catch(e){job=null;say(e.message);render()}
+  }},'只修这些');
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'修一下'},h('h3',{},'哪里不对？'),
+      h('p',{class:'muted',style:'margin:-6px 0 12px'},'只改勾选的部分，其他保持不变'+(S.config.fix_cost?`，约 ¥${S.config.fix_cost.toFixed(2)}`:'')+'。修坏了可以撤销。'),
+      cats,note,h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),ok))));
+}
+async function undoFix(){
+  if(job||!viewing)return;
+  try{viewing=await api(`/api/looks/${viewing.id}/undo`,{method:'POST'});await refresh()}catch(e){say(e.message)}
 }
 async function makeTurn(){
   if(job||!viewing)return;say('');playOnce=viewing.id;
