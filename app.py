@@ -153,7 +153,7 @@ def cutout(im: Image.Image, holes=False):
     return out
 
 
-CUT_VERSION = 4
+CUT_VERSION = 5
 _rembg = {}
 
 
@@ -197,6 +197,10 @@ def ai_cutout(im: Image.Image, category):
         person = True
         if 0.25 < area(both) / max(area(mask), 1) < 0.92:
             mask = both.filter(ImageFilter.GaussianBlur(1))
+    if category in ("accessory", "belt"):  # 项链、手链、卷起来的腰带中间的白底也去掉
+        r, g, bl = rgb.split()
+        white = ImageChops.darker(r, ImageChops.darker(g, bl)).point(lambda v: 0 if v >= 240 else 255)
+        mask = ImageChops.multiply(mask, white.filter(ImageFilter.MinFilter(3)))
     box = mask.point(lambda v: 255 if v > 24 else 0).getbbox()
     if not box or (box[2] - box[0]) * (box[3] - box[1]) < 0.02 * rgb.width * rgb.height:
         return None
@@ -225,10 +229,11 @@ def hang_fit(path, category, own=False):
     width = np.array([(r[1] - r[0]) if r else 0 for r in rows], dtype=float)
     if width.max() <= 0:
         return None
+    fill = round(float(a.mean()), 3)  # 实心部分占整张图多少，鞋架上按这个把大小调一致
     if own:  # AI 整理过、自带衣架的：不裁，挂钩位置取最上面那几行的中心
         ys = [y for y in range(h) if rows[y]][:max(3, int(h * 0.03))]
         hx = sum((rows[y][0] + rows[y][1]) / 2 for y in ys) / len(ys) / w
-        return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "v": 3}
+        return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "fill": fill, "v": 4}
     # 自带衣架（你自己挂着拍的）：最上面是一截很细、居中的挂钩。
     # 这种不裁、不画我们的衣架，直接把它自己的挂钩挂到衣杆上。
     if category in ("shirt", "pants"):
@@ -239,7 +244,7 @@ def hang_fit(path, category, own=False):
         if thin >= 0.02 * h and rows[y0]:
             hx = (rows[y0][0] + rows[y0][1]) / 2 / w
             if 0.3 < hx < 0.7:
-                return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "v": 3}
+                return {"own": True, "hx": round(hx, 3), "ar": round(h / w, 3), "fill": fill, "v": 4}
     top = 0
     if category == "shirt":
         # 领口：宽度第一次超过最大宽度的 30%，并且之后几行都保持住（避开细的挂钩、人台脖子）
@@ -265,7 +270,7 @@ def hang_fit(path, category, own=False):
     l, r = rows[y_sh]
     t = rows[top] or rows[y_sh]
     return {"sw": round((r - l) / w, 3), "cx": round((l + r) / 2 / w, 3), "nx": round((t[0] + t[1]) / 2 / w, 3),
-            "ar": round(h / w, 3), "v": 3}
+            "ar": round(h / w, 3), "fill": fill, "v": 4}
 
 
 def ensure_cut(it):
@@ -273,7 +278,7 @@ def ensure_cut(it):
     if it["category"] not in GARMENTS:
         return False
     if it.get("cutv") == CUT_VERSION:
-        if it.get("cut") and (it.get("fit") or {}).get("v") != 3 and (ITEMS / it["cut"]).exists():
+        if it.get("cut") and (it.get("fit") or {}).get("v") != 4 and (ITEMS / it["cut"]).exists():
             it["fit"] = hang_fit(ITEMS / it["cut"], it["category"], bool(it.get("hanger")))
             return True
         return False
@@ -773,10 +778,38 @@ def index():
     return FileResponse(ROOT / "static" / "index.html")
 
 
+def strip_demo_bar(path):
+    """早期演示模式在图片底部加过一条黑条（DEMO MODE…），换装时会被照搬。检测到就裁掉。"""
+    try:
+        im = Image.open(path).convert("RGB")
+        w, h = im.size
+        bar = im.crop((0, h - 30, w, h - 6)).convert("L")
+        above = im.crop((0, h - 60, w, h - 40)).convert("L")
+        dark = sum(bar.getdata()) / (bar.width * bar.height)
+        light = sum(above.getdata()) / (above.width * above.height)
+        if dark < 60 and light > 150:
+            ys = [y for y in range(h - 80, h) if sum(im.crop((0, y, w, y + 1)).convert("L").getdata()) / w < 70]
+            im.crop((0, 0, w, min(ys) if ys else h - 40)).save(path, quality=95)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 @app.get("/api/state")
 def state():
     with _lock:
         db = db_load()
+        if not db.get("bar_fixed"):
+            for it in db["items"].values():
+                if it["category"] == "person":
+                    strip_demo_bar(ITEMS / it["file"])
+            for lk in db["looks"].values():
+                for f in [lk["file"], *lk.get("history", []), lk.get("person_file")]:
+                    if f:
+                        strip_demo_bar(RESULTS / f)
+            db["bar_fixed"] = True
+            db_save(db)
         if [it for it in db["items"].values() if ensure_cut(it)]:  # 旧单品补上透明底展示图
             db_save(db)
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),

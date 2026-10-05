@@ -92,9 +92,9 @@ button{cursor:pointer}
 .shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:0 10px 6px;min-height:92px}
 .shelf::-webkit-scrollbar{display:none}
 .ledge{height:7px;border-radius:4px;background:linear-gradient(#f3f1ed,#d2ccc2);box-shadow:0 4px 8px rgba(0,0,0,.07)}
-.thing{position:relative;flex:0 0 108px;display:flex;flex-direction:column;align-items:center;transition:transform .35s var(--ease)}
+.thing{position:relative;flex:0 0 112px;min-height:92px;justify-content:flex-end;display:flex;flex-direction:column;align-items:center;transition:transform .35s var(--ease)}
 .thing:hover,.thing.front{transform:translateY(-6px) scale(1.12)}
-.thing .pick{border:0;background:none;padding:0;width:104px;height:78px}
+.thing .pick{border:0;background:none;padding:0;width:104px;height:78px;display:flex;align-items:flex-end;justify-content:center}
 .thing .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:drop-shadow(0 6px 6px rgba(60,50,40,.14))}
 .thing .pick img.card{background:#fff;border-radius:6px;padding:4px}
 .thing.on::after{content:"";position:absolute;bottom:-11px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--accent)}
@@ -223,7 +223,7 @@ button{cursor:pointer}
       <div class="caption" id="caption" aria-live="polite"></div>
     </div>
     <div class="shelfwrap" id="shelfwrap" aria-label="鞋和配饰">
-      <span class="shelflabel">鞋 · 腰带 · 配饰</span>
+      <span class="shelflabel">鞋 · 配饰</span>
       <div class="shelf" id="shelf"></div>
       <div class="ledge"></div>
     </div>
@@ -403,11 +403,19 @@ function renderRail(){
 $('rackadd').addEventListener('click',()=>pickFiles('shirt'));
 /* Looks 用滚轮也能左右滑 */
 $('looks').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){e.currentTarget.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
+/* 鞋架上大小统一：按“实心部分的面积”缩放，而不是按图片外框，细长的项链和宽大的鞋看起来一样分量 */
+function shelfSize(i){
+  const f=i.fit; if(!i.cut||!f||!f.fill)return null;
+  const area=5200, w0=Math.sqrt(area/(f.fill*f.ar));
+  let w=Math.min(118,Math.max(44,w0)), hh=w*f.ar;
+  if(hh>84){hh=84;w=hh/f.ar}
+  return `width:${w.toFixed(0)}px;height:${hh.toFixed(0)}px`;
+}
 function renderShelf(){
   const list=[...of('shoes'),...of('belt'),...of('hat'),...of('accessory')];
   $('shelf').replaceChildren(...list.map(i=>{
     const el=h('div',{class:'thing'+(isOn(i)?' on':''),'data-id':i.id},
-      h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),onclick:()=>wearIt(i)},
+      h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),style:shelfSize(i),onclick:()=>wearIt(i)},
         h('img',{src:cut(i),alt:nameOf(i),draggable:'false',class:i.cut?'':'card'})),
       h('button',{class:'x','aria-label':'拿走',onclick:()=>remove(i)},'×'));
     el.addEventListener('mouseenter',()=>{hovered=i.id;$('caption').replaceChildren(h('b',{},nameOf(i)),h('span',{},isOn(i)?'穿着 · 点一下脱下':'点一下穿上'))});
