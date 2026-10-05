@@ -89,7 +89,7 @@ button{cursor:pointer}
 .shelfwrap .ledge{grid-column:1/-1}
 .shelfwrap.flash{background:rgba(201,137,91,.12)}
 .shelflabel{padding:0 0 10px 2px;font:400 13px/1 var(--serif);font-style:italic;color:var(--soft);white-space:nowrap}
-.shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:0 10px 6px;min-height:92px}
+.shelf{display:flex;gap:18px;align-items:flex-end;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding:38px 10px 6px;min-height:130px}
 .shelf::-webkit-scrollbar{display:none}
 .ledge{height:7px;border-radius:4px;background:linear-gradient(#f3f1ed,#d2ccc2);box-shadow:0 4px 8px rgba(0,0,0,.07)}
 .thing{position:relative;flex:0 0 112px;min-height:92px;justify-content:flex-end;display:flex;flex-direction:column;align-items:center;transition:transform .35s var(--ease)}
@@ -98,7 +98,11 @@ button{cursor:pointer}
 .thing .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 100%;filter:drop-shadow(0 6px 6px rgba(60,50,40,.14))}
 .thing .pick img.card{background:#fff;border-radius:6px;padding:4px}
 .thing.on::after{content:"";position:absolute;bottom:-11px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--accent)}
-.thing .x{top:-6px;right:0}
+.thing .tools{position:absolute;top:-14px;left:50%;transform:translateX(-50%);display:flex;gap:4px;opacity:0;transition:opacity .2s;white-space:nowrap}
+.thing:hover .tools,.thing:focus-within .tools{opacity:1}
+.thing .tools .x{position:static;opacity:1}
+.thing .tools .t{border:0;border-radius:999px;background:rgba(255,255,255,.95);font-size:11.5px;padding:2px 9px;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.thing .tools .t:hover{background:var(--ink);color:#fff}
 .thing.add button{width:72px;height:72px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
 .thing.add button:hover{border-color:var(--ink);color:var(--ink)}
 .thing.add{transform:none!important}
@@ -374,6 +378,20 @@ function setHover(id){
   if(prev&&prev!==f)flutter(prev,-.6);
   caption();
 }
+function renameSheet(i){
+  const name=h('input',{class:'field',value:i.name||'',maxlength:40,placeholder:LABEL[i.category]+'的名字，比如“蓝白细条纹”'});
+  const close=()=>$('layer').replaceChildren();
+  const save=async()=>{
+    try{await api('/api/items/'+i.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value})});
+      close();railKey='';await refresh()}catch(e){say(e.message)}};
+  name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'改名'},h('h3',{},'改个名字'),
+      h('div',{class:'previews'},h('img',{src:cut(i),alt:''})),name,
+      i.category==='accessory'?h('p',{class:'muted'},'写清楚是什么（项链、耳环、手表、包…），换装时模型靠名字决定戴在哪。'):null,
+      h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'保存')))));
+  name.focus();name.select();
+}
 async function tidy(i,btn){
   btn.disabled=true;btn.textContent='整理中…';say('');
   $('caption').replaceChildren(h('span',{},'正在用即梦整理这件衣服，通常要 20–60 秒…'));
@@ -400,7 +418,7 @@ function hangEl(i,n){
         onclick(){ if(!hoverable&&hovered!==i.id){setHover(i.id);return} ripple(i.id,.8);wearIt(i)},
         onfocus(){setHover(i.id)}},img),
       i.category==='pants'&&!(i.fit&&i.fit.own)?h('span',{html:CLIPS}):null)),
-    h('div',{class:'tools'},S.config.demo?null:h('button',{class:'t',title:'用即梦整理成干净的白底单品图'+(S.config.tidy_cost?`，约 ¥${S.config.tidy_cost.toFixed(2)}`:''),onclick(e){tidy(i,e.currentTarget)}},'整理'),
+    h('div',{class:'tools'},h('button',{class:'t',onclick:()=>renameSheet(i)},'改名'),S.config.demo?null:h('button',{class:'t',title:'用即梦整理成干净的白底单品图'+(S.config.tidy_cost?`，约 ¥${S.config.tidy_cost.toFixed(2)}`:''),onclick(e){tidy(i,e.currentTarget)}},'整理'),
       h('button',{class:'x','aria-label':'拿走',title:'拿走',onclick:()=>remove(i)},'×')));
   el.addEventListener('mouseenter',()=>setHover(i.id));
   return el;
@@ -447,7 +465,7 @@ function renderShelf(){
     const el=h('div',{class:'thing'+(isOn(i)?' on':''),'data-id':i.id},
       h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),style:shelfSize(i),onclick:()=>wearIt(i)},
         h('img',{src:cut(i),alt:nameOf(i),draggable:'false',class:i.cut?'':'card'})),
-      h('button',{class:'x','aria-label':'拿走',onclick:()=>remove(i)},'×'));
+      h('div',{class:'tools'},h('button',{class:'t',onclick:()=>renameSheet(i)},'改名'),h('button',{class:'x','aria-label':'拿走',title:'拿走',onclick:()=>remove(i)},'×')));
     el.addEventListener('mouseenter',()=>{hovered=i.id;$('caption').replaceChildren(h('b',{},nameOf(i)),h('span',{},isOn(i)?'穿着 · 点一下脱下':'点一下穿上'))});
     el.addEventListener('mouseleave',()=>setHover(null));
     return el;
