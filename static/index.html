@@ -867,7 +867,7 @@ async function makeTurn(force=false){
   if(job||!viewing)return;say('');playOnce=viewing.id;
   try{await follow(await api(`/api/looks/${viewing.id}/turn`+(force?'?force=1':''),{method:'POST'}));
     if(viewing&&viewing.video&&viewing.turn_anchored===false)
-      say('这段视频没用上“尾帧”（照片只当了开头），转回正面时脸可能会变。'+(viewing.turn_why?'视频模型拒绝的原因：'+viewing.turn_why+'。把这句话发给我就能对症改。':''))}
+      say('这段视频没用上“尾帧”（照片只当了开头），转回正面时脸可能会变。'+(viewing.turn_why?'原因：'+viewing.turn_why:''))}
   catch(e){job=null;say(e.message);render()}
 }
 $('go').addEventListener('click',()=>generate(false));

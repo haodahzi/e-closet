@@ -340,15 +340,17 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
         v2 = "seedance-2" in model
         secs = int(env("VIDEO_SECONDS", "6" if v2 else "5"))
         frames = ["first_frame", "last_frame"] if both else ["first_frame"]
-        cam = {"camera_fixed": env("TURN_MODE", "turntable") != "orbit"}
+        # 固定镜头：Seedance 2.0 在首尾帧模式下不接受 camera_fixed（必须留空），“相机固定”已经写在文字指令里
+        cam = {} if (v2 and both) else {"camera_fixed": env("TURN_MODE", "turntable") != "orbit"}
+        audio = {"generate_audio": False} if v2 else {}
         out = [  # 从完整到最简：时长、音频开关、固定镜头这些参数不被支持就去掉再试
-            {"frames": frames, "extra": {"generate_audio": False, **cam} if v2 else cam, "secs": secs},
+            {"frames": frames, "extra": {**audio, **cam}, "secs": secs},
             {"frames": frames, "extra": cam, "secs": 5},
             {"frames": frames, "extra": {}, "secs": 5},
         ]
         if both:  # 尾帧再多试两种：只留必需的参数；尾帧换成文件不同的同一张图
-            out += [{"frames": frames, "extra": {}, "secs": secs, "bare": True},
-                    {"frames": frames, "extra": {}, "secs": secs, "bare": True, "alt": True}]
+            out += [{"frames": frames, "extra": audio, "secs": secs, "bare": True},
+                    {"frames": frames, "extra": audio, "secs": secs, "bare": True, "alt": True}]
         return out
 
     for both in (True, False):  # 第一轮：所有模型都试首尾帧；第二轮：只给首帧
@@ -373,7 +375,9 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                 last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
                 print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
                 if both and not ("ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404):
-                    refused.append(f"{model}：{msg.strip()[:160]}")
+                    why_one = msg.split("Request id")[0].strip(" .")[:160]  # 去掉请求编号，同样的原因只记一次
+                    if why_one not in refused:
+                        refused.append(why_one)
                 if r.status_code == 401:
                     raise GenError("火山方舟 API Key 不对或已失效（401）。检查 .env 里的 ARK_API_KEY。", 401)
                 if "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
@@ -390,7 +394,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
         raise GenError(f"{last}。到火山方舟「开通管理」开通任意一个 Seedance 视频模型，"
                        "并把它的模型 ID 填到 .env 的 SEEDANCE_MODEL。" if last else "没有可用的 Seedance 模型。")
     anchored = both
-    why = "" if anchored else (refused[0] if refused else "")
+    why = "" if anchored else "；".join(refused)[:400]
     tid = j["id"]
     t0 = time.time()
 
