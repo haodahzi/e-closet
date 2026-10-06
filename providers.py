@@ -363,7 +363,9 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                     {"frames": frames, "extra": audio, "secs": secs, "bare": True, "alt": True}]
         return out
 
-    for both in (True, False):  # 第一轮：所有模型都试首尾帧；第二轮：只给首帧
+    # 默认只给首帧（Seedance 2.0 不收真人照片做首尾帧）；.env 里 TURN_LAST_FRAME=1 才先试首尾帧
+    rounds = (True, False) if env("TURN_LAST_FRAME", "0") == "1" else (False,)
+    for both in rounds:  # 第一轮：所有模型都试首尾帧；第二轮：只给首帧
         for model in models:
             if model in closed:
                 continue
@@ -378,7 +380,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                 r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
                 j = r.json() if "json" in r.headers.get("content-type", "") else {}
                 if r.status_code < 400 and j.get("id"):
-                    print(f"\n  · 转一圈：{model}，{'首尾帧（照片同时作首帧和尾帧）' if both else '只有首帧（这个模型不支持尾帧）'}", flush=True)
+                    print(f"\n  · 转一圈：{model}，{'首尾帧（照片同时作首帧和尾帧）' if both else '只给首帧'}", flush=True)
                     break
                 e = j.get("error") or {}
                 msg = f"{e.get('code', '')} {e.get('message', r.text[:300])}"
