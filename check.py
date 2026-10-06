@@ -68,7 +68,38 @@ try:
 except Exception as e:
     bad(f"请求超时或中断：{type(e).__name__}: {e}")
 
-# 3. Seedream 真的出一张图（要钱，需加 --image）
+# 3. 转身视频（Seedance）：看最近的视频任务，不生成新视频，不花钱
+print()
+vm = P.env("SEEDANCE_MODEL")
+print(f"  · 转身视频用的模型：{vm or '没在 .env 里写 SEEDANCE_MODEL，会依次试候选模型'}")
+if vm and vm != vm.strip():
+    bad("SEEDANCE_MODEL 前后有空格，删掉空格")
+t = time.time()
+try:
+    r = httpx.get(f"{P.ARK}/contents/generations/tasks", headers=H, params={"page_num": 1, "page_size": 5},
+                  timeout=P.timeout(30))
+    if r.status_code == 200:
+        tasks = (r.json() or {}).get("items") or []
+        ok(f"视频接口能连上（{time.time() - t:.1f} 秒），最近有 {len(tasks)} 个视频任务")
+        for tk in tasks[:3]:
+            err = (tk.get("error") or {}).get("message") or ""
+            print(f"      {tk.get('model', '?')}  {tk.get('status', '?')}  {err[:100]}")
+        urls = [(tk.get("content") or {}).get("video_url") for tk in tasks if (tk.get("content") or {}).get("video_url")]
+        if urls:  # 生成好的视频放在另一个域名上，下载也要能连上
+            host = urls[0].split("/")[2]
+            try:
+                d = httpx.get(urls[0], headers={"Range": "bytes=0-1023"}, timeout=P.timeout(30), follow_redirects=True)
+                ok(f"能连上视频下载地址 {host}（{d.status_code}）") if d.status_code < 400 else \
+                    bad(f"视频下载地址 {host} 返回 {d.status_code}（链接可能已过期，过期不影响新视频）")
+            except Exception as e:
+                bad(f"连不上视频下载地址 {host}：{type(e).__name__}: {e}")
+                tip("视频生成好了但下载不下来：开着 VPN/代理的话关掉，或把 volces.com 设为直连")
+    else:
+        bad(f"视频接口不能用（{r.status_code}）：{r.text[:300]}")
+except Exception as e:
+    bad(f"连不上视频接口：{type(e).__name__}: {e}")
+
+# 4. Seedream 真的出一张图（要钱，需加 --image）
 if "--image" in sys.argv:
     model = P.env("SEEDREAM_MODEL", "doubao-seedream-4-5-251128")
     print(f"\n  · 用 {model} 生成一张测试图，通常 10–40 秒…")

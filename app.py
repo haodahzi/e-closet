@@ -79,8 +79,14 @@ def log_error(where, e):
 
 
 def friendly(e):
+    try:  # 连的是哪个地址：方舟接口，还是生成好的视频/图片的下载地址
+        host = e.request.url.host
+    except Exception:
+        host = ""
+    where = "" if not host else ("（下载生成结果的地址 " + host + "）" if "ark." not in host else "（" + host + "）")
     if isinstance(e, (httpx.ConnectError, httpx.ProxyError, httpx.ConnectTimeout)):
-        return "连不上即梦（火山方舟）的服务器。检查网络；开着 VPN/代理的话先关掉再试。可以运行 python check.py 诊断。"
+        return (f"连不上即梦（火山方舟）的服务器{where}：{type(e).__name__}。检查网络；开着 VPN/代理的话先关掉再试。"
+                "可以运行 python check.py 诊断。")
     if isinstance(e, httpx.TimeoutException):
         return "即梦那边太久没出图，已放弃。稍后再试一次；一直这样的话运行 python check.py 诊断。"
     return f"生成中断：{type(e).__name__}: {e}"
