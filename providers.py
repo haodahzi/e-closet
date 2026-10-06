@@ -301,7 +301,7 @@ SEEDANCE_CANDIDATES = ["doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-2
 VIDEO_RATIOS = [(16, 9), (4, 3), (1, 1), (3, 4), (9, 16), (21, 9)]
 
 
-def video_frame_uri(x, side=1280):
+def video_frame_uri(x, side=1280, quality=90):
     """发给视频模型的首帧：按照片四边的颜色补边成最接近的标准比例（居中，只补不裁）。
     不补的话模型会自己裁切或补黑边，人在视频里的位置就和照片对不上，播放时像分了层。"""
     from PIL import Image
@@ -319,7 +319,7 @@ def video_frame_uri(x, side=1280):
         canvas.paste(im, ((W - w) // 2, (H - h) // 2))
         im = canvas
     buf = io.BytesIO()
-    im.save(buf, "JPEG", quality=90)
+    im.save(buf, "JPEG", quality=quality)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -333,27 +333,36 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     closed = set()  # 没开通、不存在的模型，第二轮不再试
     last = None
 
+    pic2 = video_frame_uri(image, quality=88)  # 和首帧看起来一样、文件不同：有的模型不收两张一模一样的图
+    refused = []  # 带尾帧被拒绝的原因，显示给用户看
+
     def variants(model, both):
         v2 = "seedance-2" in model
         secs = int(env("VIDEO_SECONDS", "6" if v2 else "5"))
         frames = ["first_frame", "last_frame"] if both else ["first_frame"]
         cam = {"camera_fixed": env("TURN_MODE", "turntable") != "orbit"}
-        return [  # 从完整到最简：时长、音频开关、固定镜头这些参数不被支持就去掉再试
+        out = [  # 从完整到最简：时长、音频开关、固定镜头这些参数不被支持就去掉再试
             {"frames": frames, "extra": {"generate_audio": False, **cam} if v2 else cam, "secs": secs},
             {"frames": frames, "extra": cam, "secs": 5},
             {"frames": frames, "extra": {}, "secs": 5},
         ]
+        if both:  # 尾帧再多试两种：只留必需的参数；尾帧换成文件不同的同一张图
+            out += [{"frames": frames, "extra": {}, "secs": secs, "bare": True},
+                    {"frames": frames, "extra": {}, "secs": secs, "bare": True, "alt": True}]
+        return out
 
     for both in (True, False):  # 第一轮：所有模型都试首尾帧；第二轮：只给首帧
         for model in models:
             if model in closed:
                 continue
             for t in variants(model, both):
+                imgs = [pic2 if (role == "last_frame" and t.get("alt")) else pic for role in t["frames"]]
                 body = {"model": model,
                         "content": [{"type": "text", "text": prompt}] +
-                                   [{"type": "image_url", "image_url": {"url": pic}, "role": role} for role in t["frames"]],
-                        "resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "duration": t["secs"],
-                        "watermark": False, **t["extra"]}
+                                   [{"type": "image_url", "image_url": {"url": u}, "role": role} for u, role in zip(imgs, t["frames"])],
+                        "duration": t["secs"], **t["extra"]}
+                if not t.get("bare"):
+                    body.update({"resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "watermark": False})
                 r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
                 j = r.json() if "json" in r.headers.get("content-type", "") else {}
                 if r.status_code < 400 and j.get("id"):
@@ -363,6 +372,8 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                 msg = f"{e.get('code', '')} {e.get('message', r.text[:300])}"
                 last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
                 print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
+                if both and not ("ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404):
+                    refused.append(f"{model}：{msg.strip()[:160]}")
                 if r.status_code == 401:
                     raise GenError("火山方舟 API Key 不对或已失效（401）。检查 .env 里的 ARK_API_KEY。", 401)
                 if "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
@@ -379,6 +390,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
         raise GenError(f"{last}。到火山方舟「开通管理」开通任意一个 Seedance 视频模型，"
                        "并把它的模型 ID 填到 .env 的 SEEDANCE_MODEL。" if last else "没有可用的 Seedance 模型。")
     anchored = both
+    why = "" if anchored else (refused[0] if refused else "")
     tid = j["id"]
     t0 = time.time()
 
@@ -394,7 +406,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     url = (done.get("content") or {}).get("video_url")
     if not url:
         raise GenError(f"视频生成完了但没有返回视频地址：{json.dumps(done, ensure_ascii=False)[:300]}")
-    return url, anchored
+    return url, anchored, why
 
 
 async def ark_describe(client, image, category):

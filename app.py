@@ -1170,7 +1170,7 @@ def turn_prompt():
     """转一圈的指令（中文，即梦视频模型对中文理解更好）。
     TURN_MODE=turntable（默认）：360° 转台展示，人像雕塑一样定住姿势、整体匀速转一圈；
     TURN_MODE=orbit：人完全不动，镜头环绕人物一圈（环绕运镜），有些模型这样更不容易变形。"""
-    keep = ("人物全程保持同一个站姿，像静止的雕塑：手臂、手、腿、脚、头和表情都完全不动，不迈步、不摆手、不扭腰、不转头，"
+    keep = ("人物全程保持同一个站姿，像静止的雕塑：手臂、手、腿、脚、头和表情都完全不动，不迈步、不摆手、不扭腰、不转头、不眨眼、不点头，"
             "身体比例和五官不变形；服装的颜色、条纹格纹、版型、塞法和配饰全程保持一致，布料只随旋转轻微自然摆动。"
             "纯白无缝影棚背景（严格的 #FFFFFF，全程不变，没有灰色渐变、暗角和地平线），柔和均匀的光线，人物全身始终完整在画面中央，脚下只有淡淡的自然阴影。"
             "不切镜头、不推拉变焦：人物在画面中的大小、位置、头顶和脚底的高度全程和第一帧完全相同；不加黑边、不出现其他人物或文字。")
@@ -1180,19 +1180,22 @@ def turn_prompt():
     # 默认「转台」模式：严格按这几条写，顺序也照这个来
     return ("360度转台展示，相机固定。"
             "人物站在看不见的旋转台上，以身体中轴为轴心整体匀速旋转一整圈，依次转到侧面、背面、另一侧，最后回到正面停住。"
-            "人物像静止的雕塑：手臂、腿、脚、头、表情都不动，不迈步、不摆手、不扭腰。"
+            "人物像静止的雕塑、蜡像，从第一帧到最后一帧全身没有任何动作，连微小的动作也没有："
+            "手臂、手指、腿、脚、头、表情都不动，不迈步、不摆手、不扭腰，"
+            "不眨眼、不点头、不转头、不歪头、不张嘴、不改变表情，看不出呼吸起伏，头发和衣服不飘动；"
+            "唯一在动的是脚下的转台。"
             "身体比例和五官不变形。"
-            "回到正面停住以后直到视频结束都完全静止。"
+            "回到正面停住以后直到视频结束都完全静止，画面像一张照片。"
             "服装的颜色、图案、版型和配饰全程不变。"
             "纯白背景 #FFFFFF，人物全身始终完整在画面中央，大小和位置和第一帧相同，不推拉、不切镜头、不加黑边和文字。")
 
 
 async def _video(client, job, image, prompt, label):
-    url, anchored = await P.seedance_turn(client, image, prompt, lambda s: job.update(step=f"{label}（通常 1–3 分钟）"))
+    url, anchored, why = await P.seedance_turn(client, image, prompt, lambda s: job.update(step=f"{label}（通常 1–3 分钟）"))
     job.update(step="下载视频")
     r = await client.get(url, follow_redirects=True, timeout=P.timeout(300))
     r.raise_for_status()
-    return r.content, anchored
+    return r.content, anchored, why
 
 
 async def run_turn(job, look_id):
@@ -1207,13 +1210,14 @@ async def run_turn(job, look_id):
         name = f"{look_id}_turn.mp4"
         out = RESULTS / name
         async with httpx.AsyncClient(timeout=P.timeout(120)) as client:
-            data, anchored = await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频")
+            data, anchored, why = await _video(client, job, RESULTS / lk["file"], turn_prompt(), "生成转身视频")
             out.write_bytes(data)
         with _lock:
             db = db_load()
             if look_id in db["looks"]:
                 db["looks"][look_id]["video"] = name
                 db["looks"][look_id]["turn_anchored"] = anchored  # 照片有没有同时当尾帧（转回来脸更稳）
+                db["looks"][look_id]["turn_why"] = why  # 尾帧被拒绝的原因（模型返回的原话）
                 db["looks"][look_id]["video_at"] = time.time()  # 重转以后文件名不变，界面靠这个刷新缓存
                 db_save(db)
                 job.update(status="done", look=db["looks"][look_id])
