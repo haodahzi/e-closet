@@ -419,11 +419,11 @@ async def ark_describe(client, image, category):
 
 
 CHECKS = ("same_person", "shirt_match", "pants_match", "outfit_complete", "natural", "wear_correct",
-          "shoes_match", "belt_match", "hat_match", "accessories_match", "white_bg")
+          "shoes_match", "belt_match", "hat_match", "accessories_match", "white_bg", "light_visible")
 # 哪项没过就只修哪一处；natural / outfit_complete 属于整体问题，只能整身重做
 FIXABLE = {"shirt_match": "shirt", "pants_match": "pants", "shoes_match": "shoes", "belt_match": "belt",
            "hat_match": "hat", "accessories_match": "accessory", "same_person": "face", "wear_correct": "wear",
-           "white_bg": "background"}
+           "white_bg": "background", "light_visible": "light"}
 
 
 async def ark_judge(client, refs, result, wear_txt):
@@ -439,7 +439,9 @@ async def ark_judge(client, refs, result, wear_txt):
         '"white_bg": bool (the background is plain pure white with nothing else in it), '
         '"pants_match": bool (trousers colour, fabric, cut and length match the trousers reference; true if none), '
         '"outfit_complete": bool (every referenced item is worn, in the right place and at a natural scale), '
-        '"natural": bool (pose and lighting match image 1; no collage look, no extra limbs or artefacts), '
+        '"natural": bool (natural lighting and a believable body; no collage look, no extra limbs or artefacts), '
+        '"light_visible": bool (any white or very light garment is clearly visible against the white background, '
+        'with visible folds, shading and edges, not washed out or merging into it; true if there is none), '
         f'"wear_correct": bool (the shirt is worn and the person stands as requested: {wear_txt or "no specific request"}), '
         '"shoes_match": bool (the shoes have the same type, colours, laces and sole as the shoes reference; true if none), '
         '"belt_match": bool (a belt like the belt reference is visibly worn at the waist; true if no belt reference), '

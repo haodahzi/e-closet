@@ -386,18 +386,59 @@ WHITE = ("Background: a pure white seamless studio backdrop, exactly #FFFFFF, fi
          "only a faint natural shadow under the feet; nothing else in the background.")
 
 
-def whiten_bg(im):
+def person_mask(im, fill=False):
+    """人（连同身上的衣服、鞋）在哪：用本地抠图模型。没装 rembg 或抠不出来时返回 None。
+    fill=True：把人形里的空缺补满。白裤子配白背景时抠图模型常常认不出裤子，但它上面是上衣、下面是鞋，
+    按“每一列从最上到最下、每一行从最左到最右”填满，裤子所在的位置就被保护住了。"""
+    try:
+        from rembg import remove
+    except ImportError:
+        return None
+    try:
+        small = im.copy()
+        small.thumbnail((640, 640))
+        m = remove(small, session=_session(P.env("REMBG_MODEL", "u2net")), only_mask=True).point(lambda v: 255 if v > 40 else 0)
+        if m.histogram()[255] < 0.03 * m.width * m.height:  # 几乎没抠到人：不可信
+            return None
+        if fill:
+            import numpy as np
+            a = np.asarray(m) > 0
+            ys, xs = np.arange(a.shape[0])[:, None], np.arange(a.shape[1])[None, :]
+            cols = a.any(axis=0)
+            top = np.where(cols, a.argmax(axis=0), a.shape[0])
+            bot = np.where(cols, a.shape[0] - 1 - a[::-1].argmax(axis=0), -1)
+            rows = a.any(axis=1)
+            left = np.where(rows, a.argmax(axis=1), a.shape[1])
+            right = np.where(rows, a.shape[1] - 1 - a[:, ::-1].argmax(axis=1), -1)
+            a = a | ((ys >= top) & (ys <= bot)) | ((xs >= left[:, None]) & (xs <= right[:, None]))
+            m = Image.fromarray(a.astype(np.uint8) * 255, "L")
+        # 往外多留一小圈（约图宽 1.2%），白衣服柔和的边缘、脚下的影子都算人的一部分，不去碰
+        grow = max(3, round(m.width * 0.012)) | 1
+        return m.filter(ImageFilter.MaxFilter(grow)).resize(im.size, Image.BILINEAR)
+    except Exception as e:
+        log_error("person_mask", e)
+        return None
+
+
+def whiten_bg(im, light=False):
     """把生成图里接近白色、并且和画面边缘连在一起的背景统一成纯白 #FFFFFF。
     模型说是白底，实际常常带一点灰或暗角；页面背景是固定的纯白，这样照片和背景就没有分界线。
-    人身上的白衬衫不和边缘相连的部分、脚下的影子（不够白）都不动。"""
+    人（连同衣服和脚下的影子）先用抠图模型圈出来，圈里一个像素都不动，白裤子、白衬衫才不会被当成背景刷掉。
+    没装 rembg 时：搭配里有白色/浅色单品（light=True）就不洗，宁可背景带点灰也不能毁衣服。"""
     try:
         import numpy as np
     except Exception:
         return im
     im = im.convert("RGB")
+    keep = person_mask(im, fill=light)
+    if keep is None and light:
+        return im
     a = np.asarray(im).astype(np.int16)
     lo, hi = a.min(axis=2), a.max(axis=2)
-    near = ((lo > 222) & (hi - lo < 16)).astype(np.uint8) * 255
+    near = ((lo > 222) & (hi - lo < 16))
+    if keep is not None:
+        near &= np.asarray(keep) < 128
+    near = near.astype(np.uint8) * 255
     full = Image.fromarray(near, "L")
     k = max(1, max(full.size) // 512)  # 在小图上找“和边缘连着的”区域，再放大回原图，快很多
     m = full.resize((full.width // k, full.height // k), Image.NEAREST).copy()  # copy：直接从数组来的图改不动
@@ -407,8 +448,35 @@ def whiten_bg(im):
             ImageDraw.floodfill(m, (x, y), 128)
     edge = np.asarray(m.point(lambda v: 255 if v == 128 else 0).resize(full.size, Image.NEAREST)
                       .filter(ImageFilter.MaxFilter(2 * k + 1))) > 0
-    bg = Image.fromarray(((edge & (near > 0)) * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(1.5))
+    soft = max(1.5, im.width / 500)  # 洗白区域的边缘柔一点，人身边不留一圈硬边
+    bg = Image.fromarray(((edge & (near > 0)) * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(soft))
     return Image.composite(Image.new("RGB", im.size, (255, 255, 255)), im, bg)
+
+
+_light_cache = {}
+
+
+def is_light(item):
+    """白色、米白这类很浅的单品：抠图里实心部分的平均亮度很高、颜色很淡。"""
+    f = item.get("cut") or item.get("file")
+    if not f:
+        return False
+    if f not in _light_cache:
+        try:
+            import numpy as np
+            im = Image.open(ITEMS / f).convert("RGBA")
+            im.thumbnail((200, 200))
+            a = np.asarray(im).astype(float)
+            on = a[..., 3] > 128
+            if not on.any():
+                on = np.ones(on.shape, bool)
+            rgb = a[..., :3][on]
+            lum = (rgb @ [0.299, 0.587, 0.114]).mean()
+            chroma = (rgb.max(axis=1) - rgb.min(axis=1)).mean()
+            _light_cache[f] = bool(lum > 218 and chroma < 32)
+        except Exception:
+            _light_cache[f] = False
+    return _light_cache[f]
 
 
 KEEP = ("Keep the person's face, hair, skin tone, body shape and camera framing exactly as in image 1; "
@@ -444,10 +512,15 @@ def clothes_prompts(pieces, wear):
                 "shoes (same type, colours, laces and sole), not a generic pair. Do not invent details. Fabric should drape, crease and cast "
                 "shadows naturally under the scene's lighting. Output one photorealistic photo.")
     pose = pose_text(wear)
-    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {pose} {KEEP} " \
+    lights = [label(c, it) for c, it in pieces if c != "accessory" and is_light(it)]
+    light = (f" The {' and the '.join(lights)} {'is' if len(lights) == 1 else 'are'} white or very light: keep "
+             f"{'it' if len(lights) == 1 else 'them'} clearly separated from the white background with soft natural "
+             "shading in the folds, a gentle shadow along the edges and a soft contact shadow at the feet; expose "
+             "correctly, do not blow out the highlights, keep the fabric texture visible.") if lights else ""
+    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {pose} {KEEP}{light} " \
         f"Anything not being replaced stays as it is in image 1. {fidelity}"
     b = (f"Editorial fashion photograph: the same person from image 1, same setting, now wearing {refs}. "
-         f"{wear_txt} {pose} {KEEP} {fidelity}")
+         f"{wear_txt} {pose} {KEEP}{light} {fidelity}")
     return [a, b]
 
 
@@ -697,7 +770,7 @@ async def ensure_descs(ids):
 
 
 PART_ZH = {"shirt": "衬衫", "pants": "裤子", "belt": "腰带", "shoes": "鞋子", "hat": "帽子", "accessory": "配饰",
-           "face": "长相", "wear": "穿法和姿势", "background": "白底"}
+           "face": "长相", "wear": "穿法和姿势", "background": "白底", "light": "白色单品的轮廓"}
 
 
 def fix_inputs(sel, parts, note="", snap=None):
@@ -744,6 +817,10 @@ def fix_inputs(sel, parts, note="", snap=None):
                                                                       (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))}))
             if sel.get("pose"):  # 早期的搭配没有记姿势，就不改姿势
                 todo.append("fix the pose. " + pose_text(sel))
+        elif part == "light":
+            todo.append("make the white or very light garments clearly visible against the white background: add "
+                        "soft natural shading in their folds and a gentle shadow along their edges, keep their colour "
+                        "and fabric texture, do not overexpose.")
         elif part == "background":
             todo.append("replace the background with a pure white seamless studio backdrop (#FFFFFF), keeping only a "
                         "faint natural shadow under the feet.")
@@ -850,19 +927,23 @@ async def run_job(job, req: TryOn, plan):
                         if total(r2) >= total(qa):
                             best, qa = fixed, r2
                         break
-        im = whiten_bg(best)
+        light = any(is_light(it) for it in (items.get(x or "") for x in [req.shirt_id, req.pants_id, req.shoes_id,
+                                                                        req.belt_id, req.hat_id]) if it)
+        im = await asyncio.to_thread(whiten_bg, best, light)
         job.update(step="保存结果")
         look_id = uuid.uuid4().hex[:12]
         im.save(RESULTS / f"{look_id}.jpg", quality=95)
+        best.save(RESULTS / f"{look_id}_raw.jpg", quality=92)  # 洗白前的原图留一份，万一洗坏了能找回
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
                 "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"], "check": qa,
-                "sel": req.model_dump(exclude={"force"}), **snapshot(look_id, req)}
+                "sel": req.model_dump(exclude={"force"}), "raws": {f"{look_id}.jpg": f"{look_id}_raw.jpg"},
+                **snapshot(look_id, req)}
         look["palette"] = look_palette(look)
         with _lock:
             db = db_load()
             for old in [k for k, v in db["looks"].items() if v["key"] == plan["key"]]:  # 重新生成时替换旧图
                 o = db["looks"][old]
-                for f in {o["file"], *o.get("history", []), *o.get("turn", []), o.get("video"), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])]} - {None}:
+                for f in {o["file"], *o.get("history", []), *o.get("turn", []), o.get("video"), o.get("person_file"), *[p["file"] for p in o.get("pieces", [])], *o.get("raws", {}).values()} - {None}:
                     (RESULTS / f).unlink(missing_ok=True)
                 del db["looks"][old]
             db["looks"][look_id] = look
@@ -1117,9 +1198,14 @@ async def run_fix(job, look_id, fix: Fix):
             raise P.GenError("没说要修哪里。勾选不对的部分，或者写一句哪里不对。")
         job.update(step="修正" + "、".join(PART_ZH.get(x, x) for x in fix.parts) if fix.parts else "按说明修正")
         async with httpx.AsyncClient(timeout=P.timeout()) as client:
-            im = whiten_bg(await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts)))
+            raw = await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts))
+        items = db_load()["items"]
+        q = lk.get("sel") or {}
+        light = any(is_light(it) for it in (items.get(q.get(f"{c}_id") or "") for c in ("shirt", "pants", "shoes", "belt", "hat")) if it)
+        im = await asyncio.to_thread(whiten_bg, raw, light)
         name = f"{look_id}_f{int(time.time())}.jpg"
         im.save(RESULTS / name, quality=95)
+        raw.save(RESULTS / f"{name[:-4]}_raw.jpg", quality=92)
         with _lock:
             db = db_load()
             cur = db["looks"].get(look_id)
@@ -1130,6 +1216,7 @@ async def run_fix(job, look_id, fix: Fix):
             if cur.get("video"):
                 (RESULTS / cur.pop("video")).unlink(missing_ok=True)  # 旧的转身视频对不上了
             cur["file"], cur["created"] = name, time.time()
+            cur.setdefault("raws", {})[name] = f"{name[:-4]}_raw.jpg"
             db_save(db)
             job.update(status="done", look=cur)
     except P.GenError as e:
@@ -1174,7 +1261,7 @@ def delete_look(look_id: str):
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            for f in {lk["file"], *lk.get("history", []), *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])]} - {None}:
+            for f in {lk["file"], *lk.get("history", []), *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])], *lk.get("raws", {}).values()} - {None}:
                 (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
