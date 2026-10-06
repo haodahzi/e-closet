@@ -1325,16 +1325,45 @@ def undo_fix(look_id: str):
         return lk
 
 
+def look_files(lk):
+    return {lk["file"], *lk.get("history", []), *lk.get("turn", []), lk.get("video"), lk.get("person_file"),
+            *[p["file"] for p in lk.get("pieces", [])], *lk.get("raws", {}).values()} - {None}
+
+
 @app.delete("/api/looks/{look_id}")
 def delete_look(look_id: str):
     with _lock:
         db = db_load()
         lk = db["looks"].pop(look_id, None)
         if lk:
-            for f in {lk["file"], *lk.get("history", []), *lk.get("turn", []), lk.get("video"), lk.get("person_file"), *[p["file"] for p in lk.get("pieces", [])], *lk.get("raws", {}).values()} - {None}:
+            for f in look_files(lk):
                 (RESULTS / f).unlink(missing_ok=True)
             db_save(db)
     return {"ok": True}
+
+
+@app.delete("/api/profiles/{pid}")
+def delete_profile(pid: str):
+    """删除一个形象：它的照片（原照、形象照）和用这些照片生成的搭配一起删掉。衣橱里的衣服不动。"""
+    with _lock:
+        db = db_load()
+        items = db["items"]
+        look_pid = lambda lk: (profile_of(items[(lk.get("sel") or {}).get("person_id")], items)
+                               if (lk.get("sel") or {}).get("person_id") in items
+                               else lk.get("profile") or (lk.get("sel") or {}).get("person_id"))
+        looks = [k for k, lk in db["looks"].items() if look_pid(lk) == pid]   # 先算搭配：照片删了就找不到归属了
+        photos = [k for k, it in items.items() if it["category"] == "person" and profile_of(it, items) == pid]
+        for k in looks:
+            for f in look_files(db["looks"].pop(k)):
+                (RESULTS / f).unlink(missing_ok=True)
+        for k in photos:
+            it = items.pop(k)
+            for f in (it["file"], it.get("cut"), it.get("orig")):
+                if f:
+                    (ITEMS / f).unlink(missing_ok=True)
+        db.get("profiles", {}).pop(pid, None)
+        db_save(db)
+    return {"ok": True, "photos": len(photos), "looks": len(looks)}
 
 
 @app.post("/api/items/{item_id}/portrait")

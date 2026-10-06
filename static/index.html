@@ -927,10 +927,13 @@ function profiles(){   /* 有照片的形象按最早那张照片排；照片删
   out.forEach((p,n)=>p.name=(S.profiles||{})[p.id]?.name||`形象 ${n+1}`);
   return out;
 }
-function activePid(){
+let curPid=null;try{curPid=localStorage.getItem('pid')}catch(e){}
+function activePid(){   /* 当前形象：正在用的照片属于谁；没有照片的形象（照片删光了）靠记下来的 curPid */
   const p=item(sel.person);if(p)return profileOf(p);
+  const all=profiles();
+  if(curPid&&all.some(x=>x.id===curPid))return curPid;
   if(viewing)return lookPid(viewing);
-  const all=profiles();return all.length?all[0].id:null;
+  return all.length?all[0].id:null;
 }
 let whoMemo={};try{whoMemo=JSON.parse(localStorage.getItem('who')||'{}')}catch(e){}
 function switchTo(pid){
@@ -940,7 +943,8 @@ function switchTo(pid){
   const m=whoMemo[pid]||{}, newest=p.photos[p.photos.length-1];
   sel.person=p.photos.some(i=>i.id===m.person)?m.person:newest?newest.id:null;
   const lk=S.looks.find(l=>l.id===m.look&&lookPid(l)===pid);
-  try{localStorage.setItem('who',JSON.stringify(whoMemo))}catch(e){}
+  curPid=pid;
+  try{localStorage.setItem('who',JSON.stringify(whoMemo));localStorage.setItem('pid',pid)}catch(e){}
   if(lk)showLook(lk);else{viewing=null;peek=false;keep();render()}
 }
 function renderWho(){
@@ -959,6 +963,13 @@ function renameProfile(p){
     h('div',{class:'sheet',role:'dialog','aria-label':'给形象起名'},h('h3',{},'给这个形象起个名字'),name,
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'保存')))));
   name.focus();name.select();
+}
+async function deleteProfile(p){
+  const n=S.looks.filter(l=>lookPid(l)===p.id).length;
+  if(!confirm(`删除“${p.name}”？`+(p.photos.length?`它的 ${p.photos.length} 张照片和`:'它的')+` ${n} 套搭配都会删掉，不能恢复。衣橱里的衣服不受影响。`))return;
+  try{await api('/api/profiles/'+encodeURIComponent(p.id),{method:'DELETE'});
+    if(curPid===p.id)curPid=null;if(viewing&&lookPid(viewing)===p.id)viewing=null;
+    if(sel.person&&p.photos.some(i=>i.id===sel.person))sel.person=null;keep();await refresh()}catch(e){say(e.message)}
 }
 async function moveTo(i,pid){
   try{await api(`/api/items/${i.id}/profile`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:pid})});await refresh()}catch(e){say(e.message)}
@@ -979,8 +990,10 @@ function renderDrawer(){
         finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照'),
     h('select',{'aria-label':'归到哪个形象',onchange:e=>moveTo(i,e.target.value==='_new'?null:e.target.value)},
       ...all.map(p=>{const o=h('option',{value:p.id},'归到 '+p.name);o.selected=p.id===profileOf(i);return o}),h('option',{value:'_new'},'单独成一个新形象')));
-  const groups=all.filter(p=>p.photos.length).map(p=>h('div',{class:'pgroup'},
-    h('h4',{class:p.id===cur?'on':''},p.name,h('button',{class:'link',onclick:()=>renameProfile(p)},'改名')),
+  const groups=all.map(p=>h('div',{class:'pgroup'},
+    h('h4',{class:p.id===cur?'on':''},p.name,h('button',{class:'link',onclick:()=>renameProfile(p)},'改名'),
+      all.length>1||!p.photos.length?h('button',{class:'link',onclick:()=>deleteProfile(p)},'删除这个形象'):null),
+    p.photos.length?null:h('p',{class:'muted'},`照片已经删掉了，还留着 ${S.looks.filter(l=>lookPid(l)===p.id).length} 套搭配。`),
     h('div',{class:'photos'},...p.photos.slice().reverse().map(card),
       h('button',{class:'addp',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 添加照片'))));
   $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
