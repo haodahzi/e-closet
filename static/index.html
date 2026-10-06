@@ -206,6 +206,16 @@ button{cursor:pointer}
 .btn:disabled{opacity:.6;cursor:wait}
 .drawer{position:fixed;top:0;right:0;bottom:0;z-index:30;width:min(420px,100%);background:var(--card);padding:24px;overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.08);animation:slide .35s var(--ease)}
 @keyframes slide{from{transform:translateX(100%)}}
+/* 形象切换：两个以上形象时才出现在顶部 */
+.who{display:flex;gap:2px;background:var(--tile-hi);border-radius:999px;padding:2px}
+.who button{border:0;background:none;border-radius:999px;padding:4px 14px;font-size:12.5px;color:var(--soft)}
+.who button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.who button:hover{color:var(--ink)}
+.pgroup{margin-top:22px}
+.pgroup h4{display:flex;align-items:baseline;gap:10px;margin:0;font:400 17px/1.3 var(--serif);font-style:italic}
+.pgroup h4 .link{font:400 12px var(--sans);font-style:normal}
+.pgroup h4.on::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);align-self:center}
+.photo select{width:100%;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:inherit;font-size:12px;padding:3px 6px;color:var(--soft)}
 .drawer h3{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px;font:400 22px/1.2 var(--serif);font-style:italic}
 .photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
 .photo{position:relative}
@@ -254,6 +264,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 <body>
 <header class="top">
   <div class="brand">D<i>-</i>Closet</div>
+  <div class="who" id="who" role="tablist" aria-label="切换形象" hidden></div>
   <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
   <button class="link" id="open-photos">我的照片</button>
 </header>
@@ -355,7 +366,7 @@ async function refresh(){
   if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){$('demo').hidden=!S.config.demo;renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
+function render(){$('demo').hidden=!S.config.demo;renderWho();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
 /* 整个界面放在一屏里：电脑上窗口不够高时，把衣杆整体缩小到刚好放下，不用往下滚 */
 function fitPage(){
   const r=document.querySelector('.rack'), de=document.documentElement;
@@ -782,14 +793,17 @@ function renderFit(){
 }
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
 
+function showLook(l){
+  const q=l.sel||{};
+  sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
+    belt:item(q.belt_id)?q.belt_id:null,hat:item(q.hat_id)?q.hat_id:null,shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open',pose:q.pose||'down'};
+  viewing=l;if(l.video)playOnce=l.id;say('');keep();render();
+}
 function renderLooks(){
   requestAnimationFrame(lookEdges);
-  $('looks').replaceChildren(...(S.looks.length?S.looks.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
-    h('button',{class:'v','aria-label':'查看这套搭配',onclick(){
-      const q=l.sel||{};
-      sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
-        belt:item(q.belt_id)?q.belt_id:null,hat:item(q.hat_id)?q.hat_id:null,shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open',pose:q.pose||'down'};
-      viewing=l;if(l.video)playOnce=l.id;say('');keep();render()}},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
+  const mine=profiles().length>1?S.looks.filter(l=>lookPid(l)===activePid()):S.looks;   /* 只看当前形象的搭配 */
+  $('looks').replaceChildren(...(mine.length?mine.map(l=>h('div',{class:'look'+(viewing&&viewing.id===l.id?' on':'')},
+    h('button',{class:'v','aria-label':'查看这套搭配',onclick:()=>showLook(l)},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
     h('button',{class:'x','aria-label':'删除',onclick:async()=>{if(!confirm('删除这张试穿照？'))return;
       try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'))):
     [h('span',{class:'muted'},'生成过的会留在这里')]));
@@ -871,7 +885,7 @@ function uploadSheet(files,cat){
     let n=0;
     for(const f of files){
       ok.textContent=tidy.checked?`整理中 ${++n}/${files.length}…`:'放进衣橱…';
-      const fd=new FormData();fd.append('file',f);fd.append('category',cat);fd.append('name',name.value);fd.append('tidy',tidy.checked&&cat!=='person'?'1':'');
+      const fd=new FormData();fd.append('file',f);fd.append('category',cat);fd.append('name',name.value);fd.append('tidy',tidy.checked&&cat!=='person'?'1':'');if(cat==='person')fd.append('profile',upProfile);
       try{const it=await api('/api/items',{method:'POST',body:fd});if(cat==='person'||(cat!=='accessory'&&!sel[cat]))sel[cat]=it.id}catch(e){say(e.message)}
     }
     close();viewing=null;await refresh();
@@ -886,23 +900,85 @@ function uploadSheet(files,cat){
 /* ---------- 我的照片 ---------- */
 let drawerOpen=false;
 function openDrawer(){drawerOpen=true;renderDrawer()}
+/* ---------- 形象：同一个人的照片（原照 + 形象照）算一个形象；衣橱共用，Looks 按形象分开 ---------- */
+function profileOf(it){
+  const seen=new Set();
+  while(it&&!seen.has(it.id)){seen.add(it.id);
+    if(it.profile)return it.profile;
+    if(!it.from)return it.id;
+    const p=item(it.from);if(!p)return it.from;it=p}
+  return it?it.id:null;
+}
+const lookPid=l=>{const p=item((l.sel||{}).person_id);return p?profileOf(p):(l.profile||(l.sel||{}).person_id)};
+function profiles(){   /* 有照片的形象按最早那张照片排；照片删光了但还有搭配的形象排在后面 */
+  const out=[], seen={};
+  [...of('person')].sort((a,b)=>a.created-b.created).forEach(i=>{const pid=profileOf(i);if(!seen[pid])out.push(seen[pid]={id:pid,photos:[]});seen[pid].photos.push(i)});
+  S.looks.forEach(l=>{const pid=lookPid(l);if(pid&&!seen[pid])out.push(seen[pid]={id:pid,photos:[]})});
+  out.forEach((p,n)=>p.name=(S.profiles||{})[p.id]?.name||`形象 ${n+1}`);
+  return out;
+}
+function activePid(){
+  const p=item(sel.person);if(p)return profileOf(p);
+  if(viewing)return lookPid(viewing);
+  const all=profiles();return all.length?all[0].id:null;
+}
+let whoMemo={};try{whoMemo=JSON.parse(localStorage.getItem('who')||'{}')}catch(e){}
+function switchTo(pid){
+  const cur=activePid();if(pid===cur||job)return;
+  whoMemo[cur]={person:sel.person,look:viewing&&viewing.id};   /* 记住这个形象刚才看的照片和搭配 */
+  const p=profiles().find(x=>x.id===pid);if(!p)return;
+  const m=whoMemo[pid]||{}, newest=p.photos[p.photos.length-1];
+  sel.person=p.photos.some(i=>i.id===m.person)?m.person:newest?newest.id:null;
+  const lk=S.looks.find(l=>l.id===m.look&&lookPid(l)===pid);
+  try{localStorage.setItem('who',JSON.stringify(whoMemo))}catch(e){}
+  if(lk)showLook(lk);else{viewing=null;peek=false;keep();render()}
+}
+function renderWho(){
+  const all=profiles(), w=$('who');
+  w.hidden=all.length<2;if(w.hidden)return;
+  const cur=activePid();
+  w.replaceChildren(...all.map(p=>h('button',{role:'tab','aria-selected':String(p.id===cur),onclick:()=>switchTo(p.id)},p.name)));
+}
+function renameProfile(p){
+  const name=h('input',{class:'field',value:p.name,maxlength:20,placeholder:'比如“我”“妈妈”“通勤的我”'});
+  const close=()=>{$('layer').replaceChildren();renderDrawer()};
+  const save=async()=>{try{await api('/api/profiles/'+encodeURIComponent(p.id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value})});
+    close();await refresh()}catch(e){say(e.message)}};
+  name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'给形象起名'},h('h3',{},'给这个形象起个名字'),name,
+      h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'保存')))));
+  name.focus();name.select();
+}
+async function moveTo(i,pid){
+  try{await api(`/api/items/${i.id}/profile`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:pid})});await refresh()}catch(e){say(e.message)}
+}
+let upProfile='';
 function renderDrawer(){
   if($('layer').querySelector('.sheet'))return;
   if(!drawerOpen){if($('layer').querySelector('.drawer'))$('layer').replaceChildren();return}
   const close=()=>{drawerOpen=false;renderDrawer()};
-  const cards=of('person').map(i=>h('div',{class:'photo'+(sel.person===i.id?' on':'')},
+  const all=profiles(), cur=activePid();
+  const card=i=>h('div',{class:'photo'+(sel.person===i.id?' on':'')},
     h('button',{class:'pick',onclick:()=>{sel.person=i.id;viewing=null;keep();render()}},h('img',{src:src(i),alt:i.name||'照片'})),
     h('button',{class:'x','aria-label':'删除',onclick:()=>remove(i)},'×'),
     h('div',{class:'tag'},i.name||'照片'),
     i.from?null:h('button',{class:'mk',disabled:!!portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
       async onclick(){portraiting=i.id;renderDrawer();say('');
         try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep()}catch(e){say(e.message)}
-        finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照')));
+        finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照'),
+    h('select',{'aria-label':'归到哪个形象',onchange:e=>moveTo(i,e.target.value==='_new'?null:e.target.value)},
+      ...all.map(p=>{const o=h('option',{value:p.id},'归到 '+p.name);o.selected=p.id===profileOf(i);return o}),h('option',{value:'_new'},'单独成一个新形象')));
+  const groups=all.filter(p=>p.photos.length).map(p=>h('div',{class:'pgroup'},
+    h('h4',{class:p.id===cur?'on':''},p.name,h('button',{class:'link',onclick:()=>renameProfile(p)},'改名')),
+    h('div',{class:'photos'},...p.photos.slice().reverse().map(card),
+      h('button',{class:'addp',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 添加照片'))));
   $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
     h('div',{class:'drawer',role:'dialog','aria-label':'我的照片'},
       h('h3',{},'我的照片',h('button',{class:'link',onclick:close},'关闭')),
       h('p',{class:'muted'},'正面站立、头到脚全身入镜、光线均匀。穿贴身短袖和修身长裤，长发拨到肩后，手臂别挡住腰。随手拍的照片可以点“生成形象照”整理成标准底片。'),
-      h('div',{class:'photos'},cards,h('button',{class:'addp',onclick:()=>pickFiles('person')},'+ 添加照片')))));
+      ...groups,
+      h('div',{class:'pgroup'},h('div',{class:'photos'},h('button',{class:'addp',onclick:()=>{upProfile='';pickFiles('person')}},all.some(p=>p.photos.length)?'+ 新的形象':'+ 添加照片'))))));
 }
 $('open-photos').addEventListener('click',openDrawer);
 addEventListener('keydown',e=>{if(e.key==='Escape'){drawerOpen=false;$('layer').replaceChildren()}});

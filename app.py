@@ -937,6 +937,7 @@ async def run_job(job, req: TryOn, plan):
         look = {"id": look_id, "key": plan["key"], "file": f"{look_id}.jpg", "created": time.time(),
                 "cost": plan["cost"], "demo": MOCK, "pipeline": plan["pipeline"], "check": qa,
                 "sel": req.model_dump(exclude={"force"}), "raws": {f"{look_id}.jpg": f"{look_id}_raw.jpg"},
+                "profile": profile_of(items.get(req.person_id), items),  # 照片以后删了，这套搭配也知道是谁的
                 **snapshot(look_id, req)}
         look["palette"] = look_palette(look)
         with _lock:
@@ -1017,6 +1018,7 @@ def state():
             db_save(db)
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
+            "profiles": db.get("profiles", {}),
             "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
@@ -1027,8 +1029,9 @@ def state():
 
 @app.post("/api/items")
 async def add_item(file: UploadFile = File(...), category: str = Form(...), name: str = Form(""),
-                   tidy: str = Form("")):
-    """tidy=1：照片里有模特或背景乱时，先用即梦整理成干净的单品图，再放进衣橱（换装也更准）。"""
+                   tidy: str = Form(""), profile: str = Form("")):
+    """tidy=1：照片里有模特或背景乱时，先用即梦整理成干净的单品图，再放进衣橱（换装也更准）。
+    profile：上传照片时归到哪个形象（不填就是一个新形象）。"""
     if category not in CATEGORIES:
         raise HTTPException(400, "不认识的分类。")
     try:
@@ -1038,6 +1041,8 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     item_id = uuid.uuid4().hex[:12]
     item = {"id": item_id, "category": category, "name": name.strip()[:40], "file": f"{item_id}.jpg",
             "created": time.time()}
+    if category == "person" and profile.strip():
+        item["profile"] = profile.strip()[:40]
     if tidy == "1" and category in GARMENTS and not MOCK:
         if not P.ready(EDITOR):
             raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
@@ -1078,6 +1083,52 @@ def rename_item(item_id: str, body: Rename):
         db["items"][item_id]["name"] = body.name.strip()[:40]
         db_save(db)
         return db["items"][item_id]
+
+
+def profile_of(it, items):
+    """照片属于哪个形象：手动归过的按手动的；形象照跟着它的原照；都没有就是这张照片自己。"""
+    seen = set()
+    while it and it["id"] not in seen:
+        seen.add(it["id"])
+        if it.get("profile"):
+            return it["profile"]
+        if not it.get("from"):
+            return it["id"]
+        parent = items.get(it["from"])
+        if not parent:
+            return it["from"]
+        it = parent
+    return it["id"] if it else None
+
+
+class ProfileSet(BaseModel):
+    profile: Optional[str] = None  # 归到哪个形象；空 = 自己单独成一个新形象
+
+
+@app.post("/api/items/{item_id}/profile")
+def set_profile(item_id: str, body: ProfileSet):
+    """把一张照片归到某个形象（同一个人的几张照片放在一起，搭配也就合在一起显示）。"""
+    with _lock:
+        db = db_load()
+        it = db["items"].get(item_id)
+        if not it or it["category"] != "person":
+            raise HTTPException(404, "这张照片已经被删除。")
+        it["profile"] = body.profile or item_id
+        db_save(db)
+        return it
+
+
+class ProfileName(BaseModel):
+    name: str
+
+
+@app.patch("/api/profiles/{pid}")
+def rename_profile(pid: str, body: ProfileName):
+    with _lock:
+        db = db_load()
+        db.setdefault("profiles", {}).setdefault(pid, {})["name"] = body.name.strip()[:20]
+        db_save(db)
+        return db["profiles"][pid]
 
 
 class Order(BaseModel):
