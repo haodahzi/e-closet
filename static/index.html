@@ -45,7 +45,7 @@ button{cursor:pointer}
   background:linear-gradient(90deg,#d9d9d9,#f6f6f6 45%,#b9b9b9);box-shadow:0 2px 4px rgba(0,0,0,.18)}
 .rod::before{left:-8px}.rod::after{right:-8px}
 .railadd{position:relative;flex:0 0 96px;height:120px}
-.railadd .hook{width:20px;margin-left:-10px;height:36px;top:0}
+.railadd .hook{width:20px;margin-left:-10px;height:29px;top:0}
 .railadd button{position:absolute;left:50%;top:27px;width:72px;height:72px;margin-left:-36px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
 .railadd button:hover{border-color:var(--ink);color:var(--ink)}
 /* 衣服只在衣杆两端支架之间挂：挂得多就互相挤，不会滑出去 */
@@ -65,7 +65,8 @@ button{cursor:pointer}
 /* 衣架在衣服后面：只露出挂钩，肩膀把衣架两头盖住 */
 .hook{position:absolute;left:50%;top:0;width:84px;margin-left:-42px;height:34px;z-index:0;pointer-events:none}
 .hang.pants .hook{width:100px;margin-left:-50px;height:40px}
-.ownhook .hook{width:20px;margin-left:-10px;height:36px;top:0;z-index:0}
+/* 写成 .hang .g .ownhook：优先级要高过上面 .hang.pants .hook，不然整理过的裤子会被套上裤架挂钩的尺寸、钩柄被拉长 */
+.hang .g .ownhook .hook{width:20px;margin-left:-10px;height:29px;top:0;z-index:0}
 .g .pick{position:absolute;left:0;right:0;top:15px;bottom:0;border:0;background:none;padding:0;display:block;z-index:1}
 .g .pick img{width:100%;height:100%;object-fit:contain;object-position:50% 0;display:block;transform-origin:50% 0;
   filter:drop-shadow(0 14px 14px rgba(55,45,35,.16))}
@@ -327,8 +328,8 @@ const HANGER=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5
 const PANTS_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M50 17v8" stroke="#9d9d9d" stroke-width="2.2"/><rect x="10" y="24" width="80" height="6" rx="3" fill="#8A5A3B"/></svg>`;
 const S_HOOK=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0M50 19c0 5-6 6-6 11a6 6 0 0 0 12 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-/* 自带衣架（整理过的）只配一个短挂钩，和原来裤架的钩子一样；钩柄往下伸进衣架后面，衣架和挂钩连在一起不悬空 */
-const HOOK_ONLY=`<svg class="hook" viewBox="0 0 20 36"><path d="M10 36V17c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+/* 自带衣架（整理过的）只配一个短挂钩，和原来裤架的钩子一样；钩柄刚好插进衣架顶端，不从下面露出来 */
+const HOOK_ONLY=`<svg class="hook" viewBox="0 0 20 29"><path d="M10 29V17c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 const CLIPS=`<svg class="clips" viewBox="0 0 100 40"><rect x="18" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/><rect x="73" y="26" width="9" height="11" rx="2" fill="#a9a9a9"/></svg>`;
 const $=id=>document.getElementById(id);
 function h(tag,attrs={},...kids){const e=document.createElement(tag);
@@ -497,9 +498,9 @@ function renameSheet(i){
 /* 按肩宽缩放衬衫：肩膀正好压在衣架两臂上，挂钩从领口里出来 */
 function shirtFit(i){
   const f=i.fit;
-  if(f&&f.own&&i.cut){  /* 自带衣架：衣架顶端接在短挂钩的钩柄上，挂钩在中间 */
+  if(f&&f.own&&i.cut){  /* 自带衣架：衣架顶端接在短挂钩的钩柄上，挂钩在中间；裤子的木条和默认裤架一样高 */
     const w=Math.min(200,300/f.ar), hh=w*f.ar;
-    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:${(27-(f.ty||0)*hh).toFixed(1)}px;height:${hh.toFixed(1)}px;bottom:auto`;
+    return `left:${(100-f.hx*w).toFixed(1)}px;right:auto;width:${w.toFixed(1)}px;top:${((i.category==='pants'?24:27)-(f.ty||0)*hh).toFixed(1)}px;height:${hh.toFixed(1)}px;bottom:auto`;
   }
   if(i.category!=='shirt'||!i.cut||!f||!f.sw||f.sw<.2)return null;
   const w=Math.max(130,Math.min(260,132/f.sw,300/f.ar)), hh=w*f.ar, nx=f.nx??f.cx;
