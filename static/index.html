@@ -277,9 +277,10 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
       <div class="pieces" id="pieces"></div>
       <div class="fitrow">
       <div class="wear" id="wear">
-        <div class="seg" data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div>
-        <div class="seg" data-k="sleeves"><button data-v="down">袖子放下</button><button data-v="rolled">卷到手肘</button></div>
-        <div class="seg" data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div>
+        <div class="seg shirtonly" data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div>
+        <div class="seg shirtonly" data-k="sleeves"><button data-v="down">袖子放下</button><button data-v="rolled">卷到手肘</button></div>
+        <div class="seg shirtonly" data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div>
+        <div class="seg" data-k="pose" title="固定姿势，几套搭配放在一起更统一；转一圈视频推荐“双手微张”"><button data-v="down">双手自然下垂</button><button data-v="open">双手微张</button><button data-v="pocket">单手插兜</button></div>
       </div>
       <div class="gobox"><button class="go" id="go">生成试穿</button><p class="cost" id="cost"></p></div>
       </div>
@@ -328,7 +329,7 @@ const hoverable=matchMedia('(hover:hover)').matches;
 let S={items:[],looks:[],config:{}};
 let tidyMode=false, picked=null, drag=null, dragEnd=0;
 let beltNote=false, job=null, viewing=null, peek=false, est=null, estKey='', estTimer=null, portraiting=null, hovered=null;
-const blank={person:null,shirt:null,pants:null,belt:null,shoes:null,hat:null,accessories:[],tuck:'in',sleeves:'down',collar:'open'};
+const blank={person:null,shirt:null,pants:null,belt:null,shoes:null,hat:null,accessories:[],tuck:'in',sleeves:'down',collar:'open',pose:'down'};
 let sel={...blank};
 try{sel={...blank,...JSON.parse(localStorage.getItem('sel')||'{}')}}catch(e){}
 const keep=()=>{try{localStorage.setItem('sel',JSON.stringify(sel))}catch(e){}};
@@ -735,7 +736,7 @@ addEventListener('pointerup',()=>{if(dragging){dragging=false;playTurn(vid()?vid
 /* ---------- 今天这一身 ---------- */
 function body(force=false){
   return{person_id:sel.person,shirt_id:sel.shirt,pants_id:sel.pants,belt_id:sel.belt,shoes_id:sel.shoes,hat_id:sel.hat,accessory_ids:sel.accessories,
-    tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,force};
+    tuck:sel.tuck,sleeves:sel.sleeves,collar:sel.collar,pose:sel.pose||'down',force};
 }
 function estimate(){
   const k=JSON.stringify(body());
@@ -770,7 +771,7 @@ function renderFit(){
     chip('shirt',item(sel.shirt),drop('shirt')),chip('pants',item(sel.pants),drop('pants')),...(sel.belt?[chip('belt',item(sel.belt),drop('belt'))]:[]),
     chip('shoes',item(sel.shoes),drop('shoes')),...(sel.hat?[chip('hat',item(sel.hat),drop('hat'))]:[]),
     ...sel.accessories.map(id=>chip('accessory',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})));
-  $('wear').hidden=!sel.shirt;
+  document.querySelectorAll('#wear .shirtonly').forEach(e=>e.hidden=!sel.shirt);   /* 姿势一直能选，衬衫的穿法要有衬衫才显示 */
   document.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
   estimate();
   const any=!!(sel.shirt||sel.pants||sel.belt||sel.shoes||sel.hat||sel.accessories.length), go=$('go');
@@ -787,7 +788,7 @@ function renderLooks(){
     h('button',{class:'v','aria-label':'查看这套搭配',onclick(){
       const q=l.sel||{};
       sel={...sel,person:item(q.person_id)?q.person_id:sel.person,shirt:item(q.shirt_id)?q.shirt_id:null,pants:item(q.pants_id)?q.pants_id:null,
-        belt:item(q.belt_id)?q.belt_id:null,hat:item(q.hat_id)?q.hat_id:null,shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open'};
+        belt:item(q.belt_id)?q.belt_id:null,hat:item(q.hat_id)?q.hat_id:null,shoes:item(q.shoes_id)?q.shoes_id:null,accessories:(q.accessory_ids||[]).filter(item),tuck:q.tuck||'in',sleeves:q.sleeves||'down',collar:q.collar||'open',pose:q.pose||'down'};
       viewing=l;if(l.video)playOnce=l.id;say('');keep();render()}},h('img',{src:'/media/results/'+l.file+'?t='+l.created,alt:'',loading:'lazy'})),
     h('button',{class:'x','aria-label':'删除',onclick:async()=>{if(!confirm('删除这张试穿照？'))return;
       try{await api('/api/looks/'+l.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}}},'×'))):
@@ -818,7 +819,7 @@ function fixSheet(){
   for(const k of['shirt','pants','belt','shoes','hat'])if(q[k+'_id'])opts.push([k,LABEL[k]]);
   if((q.accessory_ids||[]).length)opts.push(['accessory','配饰']);
   opts.push(['face','长相（脸和发型）']);
-  if(q.shirt_id)opts.push(['wear','穿法（塞/放、袖子、领口）']);
+  if(q.shirt_id||q.pose)opts.push(['wear',q.shirt_id?'穿法和姿势（塞/放、袖子、领口、手的位置）':'姿势（手的位置）']);
   opts.push(['background','白底']);
   const on=new Set();
   const cats=h('div',{class:'cats'}), paint=()=>cats.replaceChildren(...opts.map(([k,v])=>h('button',{'aria-pressed':String(on.has(k)),onclick:()=>{on.has(k)?on.delete(k):on.add(k);paint()}},v)));

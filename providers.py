@@ -440,7 +440,7 @@ async def ark_judge(client, refs, result, wear_txt):
         '"pants_match": bool (trousers colour, fabric, cut and length match the trousers reference; true if none), '
         '"outfit_complete": bool (every referenced item is worn, in the right place and at a natural scale), '
         '"natural": bool (pose and lighting match image 1; no collage look, no extra limbs or artefacts), '
-        f'"wear_correct": bool (the shirt is worn as requested: {wear_txt or "no specific request"}), '
+        f'"wear_correct": bool (the shirt is worn and the person stands as requested: {wear_txt or "no specific request"}), '
         '"shoes_match": bool (the shoes have the same type, colours, laces and sole as the shoes reference; true if none), '
         '"belt_match": bool (a belt like the belt reference is visibly worn at the waist; true if no belt reference), '
         '"hat_match": bool (the hat matches the hat reference; true if no hat reference), '

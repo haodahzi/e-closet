@@ -373,6 +373,13 @@ WEAR_EN = {
                 "rolled": "Shirt sleeves are rolled up to just below the elbow."},
     "collar": {"closed": "The shirt is buttoned all the way up to the collar.",
                "open": "The top shirt button is undone, collar open, no tie."},
+    # 姿势写死：不写的话模型每次随手换姿势（插兜、叉腰…），几套搭配放在一起不统一，转身视频也更容易乱动
+    "pose": {"down": "Pose: standing upright facing the camera, weight on both feet, both arms hanging naturally "
+                     "relaxed at the sides, hands open and relaxed next to the thighs, not in pockets.",
+             "open": "Pose: standing upright facing the camera, weight on both feet, both arms held slightly away "
+                     "from the body with a small gap between arms and torso, hands relaxed and open, not in pockets.",
+             "pocket": "Pose: standing upright facing the camera, weight on both feet, the right hand casually in "
+                       "the trouser pocket, the left arm hanging naturally relaxed at the side."},
 }
 WHITE = ("Background: a pure white seamless studio backdrop, exactly #FFFFFF, filling the whole frame edge to edge; "
          "no grey gradient, no vignette, no visible floor line or horizon, no texture; soft even light, "
@@ -404,7 +411,8 @@ def whiten_bg(im):
     return Image.composite(Image.new("RGB", im.size, (255, 255, 255)), im, bg)
 
 
-KEEP = ("Keep the person's face, hair, skin tone, body shape, pose and camera framing exactly as in image 1. " + WHITE)
+KEEP = ("Keep the person's face, hair, skin tone, body shape and camera framing exactly as in image 1; "
+        "full body from head to feet. " + WHITE)
 
 
 def named(item, fallback):
@@ -414,6 +422,10 @@ def named(item, fallback):
 
 def wear_text(wear):
     return " ".join(WEAR_EN[k][wear[k]] for k in ("tuck", "sleeves", "collar"))
+
+
+def pose_text(wear):
+    return WEAR_EN["pose"][wear.get("pose") or "down"]
 
 
 def clothes_prompts(pieces, wear):
@@ -431,10 +443,11 @@ def clothes_prompts(pieces, wear):
                 "and stripe scale, collar shape, buttons, stitching and logos; the shoes must be exactly the referenced "
                 "shoes (same type, colours, laces and sole), not a generic pair. Do not invent details. Fabric should drape, crease and cast "
                 "shadows naturally under the scene's lighting. Output one photorealistic photo.")
-    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {KEEP} " \
+    pose = pose_text(wear)
+    a = f"Image 1 is a photo of a person. Dress this exact person in {refs}. {wear_txt} {pose} {KEEP} " \
         f"Anything not being replaced stays as it is in image 1. {fidelity}"
-    b = (f"Editorial fashion photograph: the same person from image 1, same pose and setting, now wearing {refs}. "
-         f"{wear_txt} {KEEP} {fidelity}")
+    b = (f"Editorial fashion photograph: the same person from image 1, same setting, now wearing {refs}. "
+         f"{wear_txt} {pose} {KEEP} {fidelity}")
     return [a, b]
 
 
@@ -447,6 +460,7 @@ def finish_prompts(shoes, wear, has_shirt):
     if has_shirt:
         todo.append(f"Adjust only how the shirt is worn: {wear_text(wear)} Keep the shirt's colour, fabric, "
                     "stripe or check scale, collar and buttons exactly as in image 1.")
+    todo.append(pose_text(wear))
     rest = ("The trousers stay exactly as in image 1. " if has_shirt else "") + KEEP
     a = f"Image 1 is a photo of a person. {' '.join(todo)} {rest} Output one photorealistic photo."
     b = f"Fashion styling photograph of the same person from image 1, unchanged. {' '.join(todo)} {rest}"
@@ -494,6 +508,7 @@ class TryOn(BaseModel):
     tuck: str = "in"
     sleeves: str = "down"
     collar: str = "open"
+    pose: str = "down"  # down 双手自然下垂 / open 双手微张 / pocket 单手插兜
     refine: bool = False
     force: bool = False
 
@@ -509,7 +524,7 @@ def build_plan(req: TryOn, items, pipeline=None, editor=None):
         return it
 
     person = get(req.person_id, "person")
-    wear = {"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}
+    wear = {"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar, "pose": req.pose}
     for k, v in wear.items():
         if v not in WEAR_EN[k]:
             raise HTTPException(400, f"穿法参数不对：{k}={v}")
@@ -682,7 +697,7 @@ async def ensure_descs(ids):
 
 
 PART_ZH = {"shirt": "衬衫", "pants": "裤子", "belt": "腰带", "shoes": "鞋子", "hat": "帽子", "accessory": "配饰",
-           "face": "长相", "wear": "穿法", "background": "白底"}
+           "face": "长相", "wear": "穿法和姿势", "background": "白底"}
 
 
 def fix_inputs(sel, parts, note="", snap=None):
@@ -723,9 +738,12 @@ def fix_inputs(sel, parts, note="", snap=None):
                 imgs.append(path)
                 todo.append(f"the face, hairstyle, skin tone and body shape must be exactly those of the person in "
                             f"image {len(imgs) + 1}.")
-        elif part == "wear" and sel.get("shirt_id"):
-            todo.append("fix how the shirt is worn: " + wear_text({k: sel.get(k) or d for k, d in
-                                                                  (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))}))
+        elif part == "wear":
+            if sel.get("shirt_id"):
+                todo.append("fix how the shirt is worn: " + wear_text({k: sel.get(k) or d for k, d in
+                                                                      (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))}))
+            if sel.get("pose"):  # 早期的搭配没有记姿势，就不改姿势
+                todo.append("fix the pose. " + pose_text(sel))
         elif part == "background":
             todo.append("replace the background with a pure white seamless studio backdrop (#FFFFFF), keeping only a "
                         "faint natural shadow under the feet.")
@@ -781,7 +799,8 @@ def check_refs(req: TryOn):
 async def run_job(job, req: TryOn, plan):
     try:
         checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
-        wear = wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) if req.shirt_id else ""
+        wear = (wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) + " " if req.shirt_id else "") + \
+            pose_text({"pose": req.pose})
         items = db_load()["items"]
         try:  # 先给还没有文字描述的单品补上描述，再按最新描述写提示词（缓存键不受影响）
             job.update(step="读懂每件单品")
