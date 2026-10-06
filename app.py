@@ -388,9 +388,14 @@ WEAR_EN = {
              "pocket": "Pose: standing upright facing the camera, weight on both feet, the right hand casually in "
                        "the trouser pocket, the left arm hanging naturally relaxed at the side."},
 }
-WHITE = ("Background: a pure white seamless studio backdrop, exactly #FFFFFF, filling the whole frame edge to edge; "
-         "no grey gradient, no vignette, no visible floor line or horizon, no texture; soft even light, "
-         "only a faint natural shadow under the feet; nothing else in the background.")
+# 背景只要求干净的白色无缝背景，不再逼模型把背景打到 #FFFFFF：模型为了背景全白会把整个画面的光提上去，
+# 人脸被打平、皮肤发光失真。偏灰的背景生成后由 whiten_bg 刷成纯白（人身上不动）。
+WHITE = ("Background: a plain white seamless studio backdrop with nothing else in it, only a faint natural shadow "
+         "under the feet. ")
+LIGHT = ("Lighting on the person: natural, realistic studio lighting like a professional fashion lookbook — a soft "
+         "key light from the front-left with gentle fill, so the face and body keep natural depth and soft shadows; "
+         "correct, not bright exposure; true-to-life skin tone and real skin texture with visible fine detail; "
+         "no overexposure, no glow, no beauty filter, no airbrushed or plastic-looking skin.")
 
 
 def person_mask(im, fill=False):
@@ -486,8 +491,8 @@ def is_light(item):
     return _light_cache[f]
 
 
-KEEP = ("Keep the person's face, hair, skin tone, body shape and camera framing exactly as in image 1; "
-        "full body from head to feet. " + WHITE)
+KEEP = ("Keep the person's face, hair, skin tone, skin texture, body shape and camera framing exactly as in image 1; "
+        "full body from head to feet. " + WHITE + LIGHT)
 
 
 def named(item, fallback):
@@ -557,8 +562,7 @@ def portrait_prompts():
     pose = ("Full body from head to feet, standing upright facing the camera, arms relaxed and slightly away from "
             "the body, hands visible, feet slightly apart. Long hair placed behind the shoulders so the neck, "
             "collarbones and shoulders are visible.")
-    scene = (WHITE + " Soft even daylight from the front, no props, "
-             "photorealistic, sharp focus, natural skin texture.")
+    scene = (WHITE + LIGHT + " No props, photorealistic, sharp focus.")
     a = f"Image 1 is a photo of a {who}. Create a clean full-body studio photo. {keep} {pose} " \
         f"Wearing {base}. {scene}"
     b = f"Studio lookbook base photo of the {who} from image 1, unchanged identity. {pose} Wearing {base}. {scene}"
