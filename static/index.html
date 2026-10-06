@@ -590,12 +590,18 @@ const vid=()=>$('frames').querySelector('video');
 const still=()=>$('frames').querySelector('img');
 /* 转一圈：正面站着 → 原地转身一周 → 回到正面。
    播放时照片藏起来（只看视频，不会两层叠在一起）；视频转回正面那一刻就停，淡回照片，不播收尾时的晃动 */
+/* 视频和照片交接：上面那层（视频）淡入淡出时，下面的照片始终完整不透明垫着，中间不会露出白底闪一下 */
+function stillInstant(on){const f=still();if(!f)return;f.style.transition='none';f.classList.toggle('show',on);void f.offsetWidth;f.style.transition=''}
+function showVideo(v){
+  stillInstant(true);v.classList.add('show');clearTimeout(v._hide);
+  v._hide=setTimeout(()=>{if(v.classList.contains('show'))stillInstant(false)},420);   /* 视频完全出来以后再藏照片，免得两层叠在一起 */
+}
 function playTurn(from=0){
   const v=vid();if(!v)return;
-  v.currentTime=from;v.classList.add('show');if(still())still().classList.remove('show');
+  v.currentTime=from;showVideo(v);
   v.play().catch(()=>{});
 }
-function endTurn(){const v=vid();if(!v)return;v.pause();v.classList.remove('show');if(still())still().classList.add('show')}
+function endTurn(){const v=vid();if(!v)return;v.pause();clearTimeout(v._hide);stillInstant(true);v.classList.remove('show')}
 function turnEnd(v){return v._end||v.duration}
 /* 人在画面里的位置：白底上找出“头顶到脚底”的范围和左右中心（归一化到 0–1）。
    整行都是深色的（比如视频底部的黑条、水印条）不算人 */
@@ -662,7 +668,8 @@ async function analyzeTurn(src,onBox){
   const grab=async t=>{v.currentTime=t;await new Promise(ok=>v.onseeked=ok);x.drawImage(v,0,0,36,48);
     const d=x.getImageData(0,0,36,48).data,g=new Float32Array(36*48);for(let k=0;k<g.length;k++)g[k]=d[k*4]*.3+d[k*4+1]*.59+d[k*4+2]*.11;return g};
   const D=v.duration, f0=await grab(0.05);
-  const box=personBox(v,v.videoWidth,v.videoHeight);onBox(box);
+  const edge=[...f0.slice(0,36),...Array.from({length:48},(_,y)=>f0[y*36]),...Array.from({length:48},(_,y)=>f0[y*36+35])].sort((a,b)=>a-b);
+  const box=personBox(v,v.videoWidth,v.videoHeight);onBox({box,bg:edge[edge.length>>1]});   /* 视频背景的亮度 */
   const step=Math.max(.08,D/80);
   let best=D, bestErr=Infinity;
   for(let t=D*.55;t<D-.02;t+=step){
@@ -699,7 +706,8 @@ function renderStage(){
       v.addEventListener('loadedmetadata',alignVideo);
       $('frames').append(v);
       let boxReady;const ready=new Promise(ok=>boxReady=ok);
-      const setBox=b=>{v._box=b;alignVideo();boxReady()};
+      /* 视频背景常常比刷成纯白的照片略灰，交接时像闪一下：把视频整体提亮一点点，背景接近纯白（最多提亮 7%） */
+      const setBox=r=>{const b=r&&r.box, bg=r&&r.bg;v._box=b;if(bg&&bg<252)v.style.filter=`brightness(${Math.min(1.07,253/bg).toFixed(3)})`;alignVideo();boxReady()};
       if(!turnEnds[u]){const t={};t.box=new Promise(ok=>{t.run=analyzeTurn(u,ok).catch(()=>{ok(null);return null})});turnEnds[u]=t}
       turnEnds[u].box.then(setBox);
       turnEnds[u].run.then(r=>{if(r)v._end=r.end});
@@ -741,7 +749,7 @@ $('stage').addEventListener('pointermove',e=>{
 });
 $('stage').addEventListener('pointerleave',()=>{$('model').style.transform='';if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
 $('stage').addEventListener('pointerdown',e=>{const v=vid();if(v&&v.duration&&!e.target.closest('button')){
-  dragging=true;dragX=e.clientX;v.pause();if(!v.classList.contains('show')){v.currentTime=0;v.classList.add('show');if(still())still().classList.remove('show')}dragT=v.currentTime}});
+  dragging=true;dragX=e.clientX;v.pause();if(!v.classList.contains('show')){v.currentTime=0;showVideo(v)}dragT=v.currentTime}});
 addEventListener('pointerup',()=>{if(dragging){dragging=false;playTurn(vid()?vid().currentTime:0)}});
 
 /* ---------- 今天这一身 ---------- */
