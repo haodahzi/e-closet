@@ -323,6 +323,16 @@ def video_frame_uri(x, side=1280, quality=90):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+def refusal_zh(model, msg):
+    """视频模型拒绝“尾帧”的原因，翻成一句给人看的中文。"""
+    name = model.replace("doubao-", "").rsplit("-", 1)[0]
+    if "SensitiveContent" in msg and "real person" in msg:
+        return f"{name} 不允许用真人照片同时当首帧和尾帧（平台的真人隐私审核）"
+    if "flf2v" in msg or "last_frame" in msg:
+        return f"{name} 不支持尾帧"
+    return f"{name}：{msg.split('Request id')[0].strip(' .')[:120]}"
+
+
 async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
     """Seedance 图生视频：首帧、尾帧都是正面站立的试穿图，中间原地转一圈。返回 (视频 URL, 是否用上了尾帧)。
     尾帧是关键：转回正面时模型要对上照片，脸和姿势才不走样。所以先把开通了的模型挨个用“首尾帧”试一遍，
@@ -375,9 +385,11 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                 last = GenError(f"视频任务提交失败（{r.status_code}，{model}）：{msg}", r.status_code)
                 print(f"\n  · Seedance 提交没成功，换个方式再试：{model} {r.status_code} {msg[:160]}", flush=True)
                 if both and not ("ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404):
-                    why_one = msg.split("Request id")[0].strip(" .")[:160]  # 去掉请求编号，同样的原因只记一次
+                    why_one = refusal_zh(model, msg)  # 同样的原因只记一次
                     if why_one not in refused:
                         refused.append(why_one)
+                    if "SensitiveContent" in msg or "flf2v" in msg:
+                        break  # 平台审核或模型本身不支持尾帧：换参数也没用，换下一个模型
                 if r.status_code == 401:
                     raise GenError("火山方舟 API Key 不对或已失效（401）。检查 .env 里的 ARK_API_KEY。", 401)
                 if "ModelNotOpen" in msg or "NotFound" in msg or r.status_code == 404:
@@ -394,7 +406,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
         raise GenError(f"{last}。到火山方舟「开通管理」开通任意一个 Seedance 视频模型，"
                        "并把它的模型 ID 填到 .env 的 SEEDANCE_MODEL。" if last else "没有可用的 Seedance 模型。")
     anchored = both
-    why = "" if anchored else "；".join(refused)[:400]
+    why = "" if anchored else "；".join(refused)
     tid = j["id"]
     t0 = time.time()
 
