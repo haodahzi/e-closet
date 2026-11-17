@@ -23,19 +23,38 @@ def free_port():
     raise RuntimeError("找不到空闲端口")
 
 
+def home_dir():
+    home = os.environ.get("DCLOSET_HOME")
+    if not home:
+        if sys.platform == "win32":
+            home = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "D-Closet")
+        elif sys.platform == "darwin":
+            home = os.path.expanduser("~/Library/Application Support/D-Closet")
+        else:
+            home = os.path.expanduser("~/.local/share/d-closet")
+    os.makedirs(home, exist_ok=True)
+    return home
+
+
+def log_crash():
+    """启动失败时把完整原因写进 app.log（连同模块搜索路径，方便排查打包问题）。"""
+    import traceback
+    try:
+        with open(os.path.join(home_dir(), "app.log"), "a", encoding="utf-8") as f:
+            f.write(time.strftime("[%Y-%m-%d %H:%M:%S] 启动失败\n") + traceback.format_exc())
+            f.write(f"frozen={getattr(sys, 'frozen', False)} _MEIPASS={getattr(sys, '_MEIPASS', None)}\nsys.path={sys.path}\n")
+            base = getattr(sys, "_MEIPASS", None)
+            if base and os.path.isdir(base):
+                f.write("bundle files: " + ", ".join(sorted(os.listdir(base))[:80]) + "\n")
+    except Exception:
+        pass
+    traceback.print_exc()
+
+
 def main():
     os.environ.setdefault("NO_BROWSER", "1")
     if sys.stdout is None or sys.stderr is None:      # 无控制台的窗口程序
-        home = os.environ.get("DCLOSET_HOME")
-        if not home:
-            if sys.platform == "win32":
-                home = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "D-Closet")
-            elif sys.platform == "darwin":
-                home = os.path.expanduser("~/Library/Application Support/D-Closet")
-            else:
-                home = os.path.expanduser("~/.local/share/d-closet")
-        os.makedirs(home, exist_ok=True)
-        log = open(os.path.join(home, "app.log"), "a", encoding="utf-8", buffering=1)
+        log = open(os.path.join(home_dir(), "app.log"), "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = log
 
     import uvicorn
@@ -77,4 +96,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException:
+        log_crash()
+        raise

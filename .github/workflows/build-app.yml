@@ -20,6 +20,37 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements-desktop.txt
       - run: python build_app.py
+      - name: Smoke test - start the packaged app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:DCLOSET_NO_WINDOW = "1"; $env:NO_BROWSER_FALLBACK = "1"; $env:PORT = "8150"
+          $env:DCLOSET_HOME = "$PWD\smoke_home"
+          $p = Start-Process -FilePath "dist\D-Closet\D-Closet.exe" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep 1
+            try { Invoke-WebRequest http://127.0.0.1:8150/api/state -UseBasicParsing -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}
+            if ($p.HasExited) { break }
+          }
+          if (Test-Path smoke_home\app.log) { Get-Content smoke_home\app.log }
+          if (-not $ok) { throw "packaged app did not start" }
+          Stop-Process -Id $p.Id -Force
+      - name: Smoke test - start the packaged app (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          export DCLOSET_NO_WINDOW=1 NO_BROWSER_FALLBACK=1 PORT=8150 DCLOSET_HOME="$PWD/smoke_home"
+          dist/D-Closet.app/Contents/MacOS/D-Closet > smoke.log 2>&1 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 90); do
+            sleep 1
+            if curl -fs http://127.0.0.1:8150/api/state > /dev/null; then ok=1; break; fi
+            kill -0 $PID 2>/dev/null || break
+          done
+          cat smoke.log; cat smoke_home/app.log 2>/dev/null || true
+          [ $ok = 1 ] || { echo "packaged app did not start"; exit 1; }
+          kill $PID
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: cd dist && ditto -c -k --sequesterRsrc --keepParent D-Closet.app D-Closet-mac.zip

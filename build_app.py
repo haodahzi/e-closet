@@ -13,7 +13,11 @@ sep = os.pathsep
 args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "D-Closet",
         "--add-data", f"static{sep}static", "--add-data", f"assets{sep}assets",
         "--icon", str(ROOT / "assets" / ("icon.ico" if sys.platform == "win32" else "icon.png")),
+        "--paths", str(ROOT),
         "--hidden-import", "multipart", "--hidden-import", "pillow_heif",
+        # 项目自己的模块：app 是在函数里才 import 的，明确告诉 PyInstaller 一并打进去
+        "--hidden-import", "app", "--hidden-import", "db", "--hidden-import", "providers",
+        "--hidden-import", "settings", "--hidden-import", "palette",
         "--collect-submodules", "uvicorn", "--collect-submodules", "webview"]
 if importlib.util.find_spec("rembg"):              # 本地抠图（可选）；装了就一起打进去
     args += ["--collect-all", "rembg", "--collect-all", "onnxruntime", "--collect-all", "pymatting"]
