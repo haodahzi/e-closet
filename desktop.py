@@ -60,9 +60,9 @@ def main():
     if os.environ.get("DCLOSET_SELFTEST_WEBVIEW") == "1":   # 打包后自检：原生窗口组件能不能初始化
         import traceback
         try:
+            import importlib
             import webview
-            from webview import guilib
-            gui = guilib.initialize(None)
+            gui = importlib.import_module("webview.guilib").initialize(None)
             print("WEBVIEW_OK", getattr(webview, "__version__", "?"), getattr(gui, "__name__", gui), flush=True)
         except BaseException:
             traceback.print_exc()
