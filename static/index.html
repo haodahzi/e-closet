@@ -118,7 +118,18 @@ button{cursor:pointer}
 .piece.none:hover{color:var(--ink);border-color:var(--ink)}
 .piece.has:hover{background:var(--tile-hi)}
 .fitrow{display:flex;gap:12px;align-items:center;margin-top:10px}
-.wear{display:flex;flex-wrap:wrap;gap:6px}
+.wear{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.wearbox{flex:1;min-width:0}
+.wearbox summary{cursor:pointer;font-size:12.5px;color:var(--soft);list-style:none;padding:4px 0}
+.wearbox summary::-webkit-details-marker{display:none}
+.wearbox summary::after{content:" ▾"}
+.wearbox[open] summary::after{content:" ▴"}
+.wearbox summary:hover{color:var(--ink)}
+.acts details{position:relative}
+.acts summary{list-style:none;cursor:pointer;border-radius:999px;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);padding:5px 12px;font-size:12px;text-align:right;width:max-content;margin-left:auto}
+.acts summary::-webkit-details-marker{display:none}
+.acts details[open] summary,.acts summary:hover{background:var(--ink);color:#fff}
+.acts details>div{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-top:6px}
 .seg{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:2px;gap:2px}
 .seg button{border:0;background:none;border-radius:8px;padding:5px 11px;font-size:12px;color:var(--soft);white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -279,18 +290,21 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 .mpick button{border:1px solid var(--line);background:var(--card);border-radius:var(--r-sm);padding:6px;text-align:center;font-size:12px}
 .mpick button:hover{border-color:var(--ink)}
 .mpick img{width:100%;aspect-ratio:3/4;object-fit:cover;object-position:top;border-radius:8px;background:var(--tile);display:block;margin-bottom:4px}
+.csearch{width:260px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+.ccard{background:var(--card);border-radius:var(--r);padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;gap:3px}
+.ccard.on{box-shadow:0 0 0 1.5px var(--ink)}
+.cph{display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;border:0;padding:0;border-radius:var(--r-sm);overflow:hidden;background:var(--tile);margin-bottom:6px;font:italic 400 40px var(--serif);color:var(--faint)}
+.cph img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.cname{display:flex;align-items:center;gap:8px;font-size:14px}
+.cname b{font-weight:600}
+.ccard em{font-style:normal}
+.cact{display:flex;gap:8px;margin-top:8px}
+.cact .btn{flex:1;padding:7px 10px}
 /* ---------- 客户档案 ---------- */
 .drawer.wide{width:min(600px,100%)}
 .drawer.still{animation:none}
-.custlist{display:flex;flex-direction:column;gap:8px;margin-top:6px}
-.cust{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:10px 12px}
-.cust:hover{border-color:var(--ink)}
-.cust.on{box-shadow:0 0 0 1.5px var(--ink)}
-.cust img,.cust .noph{width:44px;height:56px;border-radius:var(--r-sm);object-fit:cover;object-position:top;background:var(--tile);flex:none}
-.cust .noph{display:flex;align-items:center;justify-content:center;font:italic 400 20px var(--serif);color:var(--soft)}
-.cust .ci{display:flex;flex-direction:column;min-width:0;flex:1}
-.cust .ci b{display:flex;align-items:center;gap:8px;font-weight:600}
-.cust em,.logrow em{font-style:normal}
+.logrow em{font-style:normal}
 .due{color:var(--danger);font-style:normal}
 .stg{font:500 11px/1 var(--sans);padding:3px 8px;border-radius:999px;background:var(--tile);color:var(--soft)}
 .stg.s1,.stg.s2{background:#EFE3D6;color:#7A4E33}
@@ -364,8 +378,9 @@ function pickModel(pid){
 <body>
 <header class="top">
   <div class="brand">D<i>-</i>Closet</div>
-  <button class="who" id="who" title="客户档案：切换客户、查看和修改资料">客户档案</button>
+  <button class="who" id="who" title="打开客户档案库：切换客户、新建、查看和修改资料">选择客户 ▾</button>
   <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
+  <button class="link" id="open-clib">客户档案库</button>
   <button class="link" id="open-lib">服装库</button>
   <button class="link" id="open-settings">⚙ 设置</button>
 </header>
@@ -388,6 +403,7 @@ function pickModel(pid){
       <h3>今天这一身</h3>
       <div class="pieces" id="pieces"></div>
       <div class="fitrow">
+      <details class="wearbox"><summary id="wearsum">穿法与姿势</summary>
       <div class="wear" id="wear">
         <div class="seg shirtonly" data-k="tuck"><button data-v="in">塞进裤子</button><button data-v="out">放在外面</button></div>
         <div class="seg jacketonly" data-k="jw" title="西装外套敞开还是扣上"><button data-v="open">外套敞开</button><button data-v="buttoned">外套扣上</button></div>
@@ -395,12 +411,13 @@ function pickModel(pid){
         <div class="seg shirtonly" data-k="collar"><button data-v="open">解开一粒</button><button data-v="closed">全部扣好</button></div>
         <div class="seg" data-k="pose" title="固定姿势，几套搭配放在一起更统一；转一圈视频推荐“双手微张”"><button data-v="down">双手自然下垂</button><button data-v="open">双手微张</button><button data-v="pocket">单手插兜</button></div>
       </div>
+      </details>
       <div class="gobox"><button class="go" id="go">生成试穿</button><p class="cost" id="cost"></p></div>
       </div>
       <p class="msg" id="msg" role="alert"></p>
     </section>
     <section class="lookcard" aria-label="穿过的搭配">
-      <h3>Looks</h3>
+      <h3>已试穿的搭配</h3>
       <div class="lookwrap" id="lookwrap"><button class="nav prev" aria-label="往前" id="lprev">‹</button><div class="looks" id="looks"></div><button class="nav next" aria-label="往后" id="lnext">›</button></div>
     </section>
     </div>
@@ -413,6 +430,7 @@ function pickModel(pid){
 
 <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
 <div id="lib" class="lib" hidden></div>
+<div id="clib" class="lib" hidden></div>
 <div id="layer"></div>
 <div id="slayer"></div>
 <div class="cur" id="cur" aria-hidden="true"><svg class="b" viewBox="0 0 22 22">
@@ -473,7 +491,7 @@ async function refresh(){
   if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){$('demo').hidden=!S.config.demo;renderWho();renderGf();renderLibrary();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
+function render(){$('demo').hidden=!S.config.demo;renderWho();renderGf();renderLibrary();renderCustLib();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
 /* 整个界面放在一屏里：电脑上窗口不够高时，把衣杆整体缩小到刚好放下，不用往下滚 */
 function fitPage(){
   const r=document.querySelector('.rack'), de=document.documentElement;
@@ -785,8 +803,8 @@ function renderStage(){
     }
   }else if(playOnce&&viewing&&playOnce===viewing.id&&vid()){playOnce=null;playTurn()}
   if(!list.length){
-    st.append(h('div',{class:'empty'},h('b',{},'Hello.'),'先放一张自己的全身照，再从衣杆上挑一件衬衫。',
-      h('button',{onclick:()=>openCustomer(activePid())},'放一张照片')));
+    st.append(h('div',{class:'empty'},h('b',{},'Hello.'),'先在“客户档案库”选一位客户，再从衣杆上挑衣服。',
+      h('button',{onclick:openCustLib},'打开客户档案库')));
   }else if(peek||!viewing)st.append(h('span',{class:'badge'},'原照'));
   else if(viewing.demo)st.append(h('span',{class:'badge'},'演示图'));
   if(viewing&&!job){
@@ -800,10 +818,12 @@ function renderStage(){
     acts.append(b);
     acts.append(viewing.video?h('button',{onclick:()=>playTurn()},'转一圈'):
       h('button',{title:'生成一段原地转身一周的视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:makeTurn},'转一圈'));
-    if(viewing.video)acts.append(h('button',{title:'不满意，重新生成一段转身视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:()=>makeTurn(true)},'重转一次'));
-    if(!viewing.demo)acts.append(h('button',{title:'哪里不对就只修哪里',onclick:fixSheet},'修一下'));
-    if(viewing.history&&viewing.history.length)acts.append(h('button',{onclick:undoFix},'撤销修改'));
     acts.append(h('button',{onclick:()=>generate(true)},'重新生成'));
+    const more=[];
+    if(viewing.video)more.push(h('button',{title:'不满意，重新生成一段转身视频'+(S.config.turn_cost?`，约 ¥${S.config.turn_cost.toFixed(2)}`:''),onclick:()=>makeTurn(true)},'重转一次'));
+    if(!viewing.demo)more.push(h('button',{title:'哪里不对就只修哪里',onclick:fixSheet},'修一下'));
+    if(viewing.history&&viewing.history.length)more.push(h('button',{onclick:undoFix},'撤销修改'));
+    if(more.length)acts.append(h('details',{},h('summary',{},'更多'),h('div',{},...more)));
     st.append(acts);
   }
   st.toggleAttribute('data-turn',!!hasVid);   /* 有转身视频：人物可以点 */
@@ -836,34 +856,30 @@ function estimate(){
     try{const r=await api('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:k});if(k===estKey){est=r;renderFit()}}catch(e){}
   },200);
 }
-function pointTo(cat){
-  const el=['shoes','belt','hat','accessory'].includes(cat)?$('shelfwrap'):$('rail');
-  el.scrollIntoView({behavior:'smooth',block:'center'});
-  if(el.id==='shelfwrap'){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),900)}
-  if(!of(cat).length)openLibrary(cat);   /* 衣橱里还没有这一类：直接去服装库上传 */
-}
 function renderFit(){
   /* 点一下就脱下：轻轻缩小淡出，不另外显示“脱下”两个字 */
-  const chip=(cat,i,drop)=>i?h('button',{class:'piece has','aria-label':nameOf(i)+'，点一下脱下',onclick(e){
+  const chip=(i,drop)=>h('button',{class:'piece has','aria-label':nameOf(i)+'，点一下脱下',onclick(e){
       if(job)return;curRing();const b=e.currentTarget;
       if(b.animate&&!matchMedia('(prefers-reduced-motion:reduce)').matches)
         b.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.82)'}],{duration:170,easing:'ease-in',fill:'forwards'}).onfinish=drop;
-      else drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i))):
-    h('button',{class:'piece none',title:cat==='shoes'?'鞋子在衣杆下面的鞋架上':'在上面的衣杆上挑',onclick:()=>pointTo(cat)},h('i',{class:'ph'}),h('span',{},cat==='shirt'?'挑衬衫 / POLO衫':cat==='shoes'||cat==='hat'?LABEL[cat]+' ↑ 鞋架':cat==='belt'?'腰带 ↑ 鞋架':LABEL[cat]));
+      else drop()}},h('img',{src:cut(i),alt:''}),h('span',{},nameOf(i)));
   const drop=k=>()=>{sel[k]=null;viewing=null;keep();render()};
   const gone=viewing&&viewing.pieces?viewing.pieces.filter(p=>{const q=viewing.sel||{};
     const id=p.category==='accessory'?null:q[p.category+'_id'];return p.category==='accessory'?false:!item(id)}):[];
   if(gone.length){
     $('pieces').replaceChildren(...(viewing.pieces||[]).map(p=>h('span',{class:'piece saved',title:'这件已经从衣橱拿走，只保存在这套搭配里'},
       h('img',{src:'/media/results/'+p.file,alt:''}),h('span',{},p.name||LABEL[p.category]))));
-  }else $('pieces').replaceChildren(
-    chip('shirt',item(sel.shirt),drop('shirt')),...(sel.jacket?[chip('jacket',item(sel.jacket),drop('jacket'))]:[]),chip('pants',item(sel.pants),drop('pants')),...(sel.belt?[chip('belt',item(sel.belt),drop('belt'))]:[]),
-    chip('shoes',item(sel.shoes),drop('shoes')),...(sel.hat?[chip('hat',item(sel.hat),drop('hat'))]:[]),
-    ...sel.accessories.map(id=>chip('accessory',item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()})));
+  }else{
+    const worn=['shirt','jacket','pants','belt','shoes','hat'].filter(k=>sel[k]&&item(sel[k])).map(k=>chip(item(sel[k]),drop(k)));
+    const accs=sel.accessories.filter(item).map(id=>chip(item(id),()=>{sel.accessories=sel.accessories.filter(x=>x!==id);viewing=null;keep();render()}));
+    $('pieces').replaceChildren(...(worn.length||accs.length?[...worn,...accs]:[h('span',{class:'muted'},'点上面衣杆、鞋架上的衣服，就穿到这里')]));
+  }
   document.querySelectorAll('#wear .shirtonly').forEach(e=>e.hidden=!sel.shirt);
   document.querySelectorAll('#wear .jacketonly').forEach(e=>e.hidden=!sel.jacket);
   document.querySelectorAll('#wear .sleevesonly').forEach(e=>e.hidden=!sel.shirt||(item(sel.shirt)||{}).category==='polo');   /* POLO衫是短袖，没有“卷袖” */   /* 姿势一直能选，衬衫的穿法要有衬衫才显示 */
   document.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(sel[g.dataset.k]===b.dataset.v))));
+  const sum=[...document.querySelectorAll('#wear .seg:not([hidden])')].map(g=>{const b=g.querySelector('[aria-pressed="true"]');return b&&b.textContent}).filter(Boolean);
+  $('wearsum').textContent='穿法与姿势：'+sum.join(' · ');
   estimate();
   const any=!!(sel.shirt||sel.jacket||sel.pants||sel.belt||sel.shoes||sel.hat||sel.accessories.length), go=$('go');
   go.disabled=!!job||!sel.person||!any;
@@ -983,10 +999,9 @@ function uploadSheet(files,cat){
 
 /* ---------- 我的照片 ---------- */
 let drawerOpen=false;
-function openDrawer(view='customers'){drawerOpen=true;drawerView=view;renderDrawer()}
 function openCustomer(pid){   /* 直接打开某位客户的档案（基本信息、量体、照片和形象照都在里面） */
-  if(!pid)return openDrawer('customers');
-  detailPid=pid;draft=null;dirty=false;drawerOpen=true;drawerView='detail';renderDrawer();
+  if(!pid)return openCustLib();
+  detailPid=pid;draft=null;dirty=false;drawerOpen=true;renderDrawer();
 }
 /* ---------- 形象：同一个人的照片（原照 + 形象照）算一个形象；衣橱共用，Looks 按形象分开 ---------- */
 function profileOf(it){
@@ -1029,7 +1044,7 @@ function switchTo(pid){
 }
 function renderWho(){
   const p=profiles().find(x=>x.id===activePid());
-  $('who').textContent=p?'客户：'+p.name:'客户档案';
+  $('who').textContent=(p?'客户：'+p.name:'选择客户')+' ▾';
 }
 async function deleteProfile(p){
   const n=S.looks.filter(l=>lookPid(l)===p.id).length;
@@ -1045,18 +1060,16 @@ let upProfile='';
 function renderDrawer(){
   if($('layer').querySelector('.sheet'))return;
   if(!drawerOpen){if($('layer').querySelector('.drawer'))$('layer').replaceChildren();return}
-  if(drawerView==='customers')return renderCustomers();
-  if(drawerView==='detail')return renderCustomerDetail();
-  renderCustomers();
+  renderCustomerDetail();
 }
 addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('slayer').firstChild)return closeSettings();
-  if(!$('layer').firstChild&&libOpen)return closeLibrary();drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren()});
+  if(!$('layer').firstChild){if(clibOpen)return closeCustLib();if(libOpen)return closeLibrary()}drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren()});
 
 /* ---------- 客户档案 ---------- */
 const STAGE_CLS={'线索':'s0','已量体':'s1','方案中':'s2','已报价':'s3','已成交':'s4','已流失':'s5'};
 const MEASURE_FIELDS=[['height','身高','cm'],['weight','体重','kg'],['neck','领围','cm'],['shoulder','肩宽','cm'],['chest','胸围','cm'],
   ['waist','腰围','cm'],['hip','臀围','cm'],['sleeve','袖长','cm'],['shirt_len','衣长','cm'],['pants_len','裤长','cm']];
-let drawerView='customers', detailPid=null, custFilter='', custStage='', draft=null, dirty=false;
+let detailPid=null, custFilter='', custStage='', draft=null, dirty=false;
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const fmtT=t=>new Date(t*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const custLooks=p=>S.looks.filter(l=>lookPid(l)===p.id);
@@ -1069,34 +1082,42 @@ function seg2(opts,val,on){
 }
 function exportCustomers(){location.href='/api/customers.csv'}
 
-function renderCustomers(){
-  const close=()=>{drawerOpen=false;renderDrawer()};
-  const all=profiles(), cur=activePid(), q=custFilter.trim().toLowerCase();
-  const stages=S.config.stages||[];
-  const match=p=>{const r=p.rec;return (!custStage||(r.stage||'线索')===custStage)&&(!q||[p.name,r.phone,r.wechat,r.company,r.occasion].some(x=>(x||'').toLowerCase().includes(q)))};
-  const list=all.filter(match).sort((a,b)=>{   /* 该跟进的排前面，其次最近改过的 */
-    const da=a.rec.follow_date||'9999', db=b.rec.follow_date||'9999';
-    return da!==db?(da<db?-1:1):(b.rec.updated||b.rec.created||0)-(a.rec.updated||a.rec.created||0)});
-  const card=p=>{const r=p.rec, due=r.follow_date&&r.follow_date<=today()&&!['已成交','已流失'].includes(r.stage||'');
-    const ph=p.photos[p.photos.length-1], n=custLooks(p).length;
-    return h('button',{class:'cust'+(p.id===cur?' on':''),onclick:()=>{detailPid=p.id;draft=null;dirty=false;drawerView='detail';renderDrawer()}},
-      ph?h('img',{src:src(ph),alt:''}):h('span',{class:'noph'},p.name.slice(0,1)),
-      h('span',{class:'ci'},
-        h('b',{},p.name,stageBadge(r)),
-        h('span',{class:'muted'},[r.company,r.phone].filter(Boolean).join(' · ')||'还没有联系方式'),
-        h('span',{class:'muted'},`${r.kind||'个人定制'} · ${n} 套搭配`+(r.follow_date?` · `:''),r.follow_date?h('em',{class:due?'due':''},`${due?'该跟进了 ':'跟进 '}${r.follow_date.slice(5)}`):null)))};
-  const search=h('input',{class:'field',placeholder:'搜索姓名、电话、公司…',value:custFilter,oninput:e=>{custFilter=e.target.value;
-    const pos=e.target.selectionStart;renderCustomers();const i=$('layer').querySelector('input.field');if(i){i.focus();i.setSelectionRange(pos,pos)}}});
-  const chips=h('div',{class:'cats'},
-    h('button',{'aria-pressed':String(!custStage),onclick:()=>{custStage='';renderCustomers()}},`全部 ${all.length}`),
-    ...stages.map(s=>h('button',{'aria-pressed':String(custStage===s),onclick:()=>{custStage=s;renderCustomers()}},`${s} ${all.filter(p=>(p.rec.stage||'线索')===s).length}`)));
-  $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
-    h('div',{class:'drawer wide',role:'dialog','aria-label':'客户档案'},
-      h('h3',{},'客户档案',h('span',{},h('button',{class:'link',onclick:exportCustomers},'导出表格'),' ',h('button',{class:'link',onclick:close},'关闭'))),
-      h('div',{class:'row',style:'margin:10px 0 14px;justify-content:space-between;gap:14px'},search,h('button',{class:'btn dark',style:'white-space:nowrap',onclick:newCustomer},'+ 新客户')),
-      chips,
-      list.length?h('div',{class:'custlist'},...list.map(card))
-        :h('p',{class:'muted',style:'margin-top:24px'},all.length?'没有符合条件的客户。':'还没有客户。点右上角“+ 新客户”建第一份档案，再给 TA 放一张全身照，就能在衣橱里为 TA 试穿方案了。'))));
+/* ---------- 客户档案库：独立页面，所有客户一目了然；详情在右侧抽屉里编辑 ---------- */
+let clibOpen=false, clibPaint=null;
+function openCustLib(){clibOpen=true;libOpen=false;renderLibrary();renderCustLib()}
+function closeCustLib(){clibOpen=false;renderCustLib()}
+function renderCustLib(){
+  const box=$('clib');
+  if(!clibOpen){box.hidden=true;box.replaceChildren();clibPaint=null;return}
+  box.hidden=false;
+  if(box.firstChild&&clibPaint){clibPaint();return}   /* 已经打开：只更新内容，不重建（搜索框不会失焦） */
+  const search=h('input',{class:'field csearch',placeholder:'搜索姓名、电话、公司…',value:custFilter,oninput:e=>{custFilter=e.target.value;paint()}});
+  const chips=h('div',{class:'cats libcats'}), grid=h('div',{class:'cgrid'});
+  function paint(){
+    const all=profiles(), cur=activePid(), q=custFilter.trim().toLowerCase(), stages=S.config.stages||[];
+    const match=p=>{const r=p.rec;return (!custStage||(r.stage||'线索')===custStage)&&(!q||[p.name,r.phone,r.wechat,r.company,r.occasion].some(x=>(x||'').toLowerCase().includes(q)))};
+    const list=all.filter(match).sort((a,b)=>{   /* 该跟进的排前面，其次最近改过的 */
+      const da=a.rec.follow_date||'9999', db=b.rec.follow_date||'9999';
+      return da!==db?(da<db?-1:1):(b.rec.updated||b.rec.created||0)-(a.rec.updated||a.rec.created||0)});
+    chips.replaceChildren(
+      h('button',{'aria-pressed':String(!custStage),onclick:()=>{custStage='';paint()}},`全部 ${all.length}`),
+      ...stages.map(x=>h('button',{'aria-pressed':String(custStage===x),onclick:()=>{custStage=x;paint()}},`${x} ${all.filter(p=>(p.rec.stage||'线索')===x).length}`)));
+    const card=p=>{const r=p.rec, open=!['已成交','已流失'].includes(r.stage||'线索'), due=r.follow_date&&r.follow_date<=today()&&open;
+      const ph=p.photos[p.photos.length-1];
+      return h('div',{class:'ccard'+(p.id===cur?' on':'')},
+        h('button',{class:'cph',title:'打开档案',onclick:()=>openCustomer(p.id)},ph?h('img',{src:src(ph),alt:'',loading:'lazy'}):h('span',{},p.name.slice(0,1))),
+        h('div',{class:'cname'},h('b',{},p.name),stageBadge(r)),
+        h('div',{class:'muted'},[r.company,r.phone].filter(Boolean).join(' · ')||'还没有联系方式'),
+        h('div',{class:'muted'},`${r.kind||'个人定制'} · ${custLooks(p).length} 套搭配`,r.follow_date?h('em',{class:due?'due':''},` · ${due?'该跟进了 ':'跟进 '}${r.follow_date.slice(5)}`):null),
+        h('div',{class:'cact'},h('button',{class:'btn dark',onclick:()=>{switchTo(p.id);closeCustLib()}},p.id===cur?'继续试穿':'去试穿'),
+          h('button',{class:'btn',onclick:()=>openCustomer(p.id)},'档案')))};
+    grid.replaceChildren(...(list.length?list.map(card):[h('div',{class:'lempty'},all.length?'没有符合条件的客户。':'还没有客户。点右上角“+ 新客户”建第一份档案。')]));
+  }
+  clibPaint=paint;paint();
+  box.replaceChildren(h('div',{class:'libin'},
+    h('div',{class:'libhead'},h('button',{class:'link',onclick:closeCustLib},'‹ 返回试穿'),h('h2',{},'客户档案库'),search,h('span',{class:'sp'}),
+      h('button',{class:'link',onclick:exportCustomers},'导出表格'),h('button',{class:'btn dark',onclick:newCustomer},'+ 新客户')),
+    chips,grid));
 }
 function newCustomer(){
   const name=h('input',{class:'field',maxlength:40,placeholder:'客户姓名或称呼，比如“张总”'});
@@ -1106,7 +1127,7 @@ function newCustomer(){
   const save=async()=>{
     if(!name.value.trim()){name.focus();return}
     try{const c=await api('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value,company:company.value,kind,gender})});
-      await refresh();detailPid=c.id;draft=null;dirty=false;drawerView='detail';switchTo(c.id);close()}catch(e){say(e.message)}};
+      close();await refresh();switchTo(c.id);openCustomer(c.id)}catch(e){alert(e.message)}};
   name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
   $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
     h('div',{class:'sheet',role:'dialog','aria-label':'新客户'},h('h3',{},'新建客户档案'),name,
@@ -1119,7 +1140,7 @@ const REC_KEYS=['name','phone','wechat','company','kind','gender','stage','follo
 let qtyF;
 function renderCustomerDetail(){
   const p=profiles().find(x=>x.id===detailPid);
-  if(!p){drawerView='customers';return renderCustomers()}
+  if(!p){drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren();return}
   const have=$('layer').querySelector('.drawer.detail');
   const ae=document.activeElement;
   if(have&&have.dataset.pid===p.id&&dirty&&have.contains(ae)&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName))return;   /* 正在填的表单，别被后台刷新冲掉 */
@@ -1128,7 +1149,7 @@ function renderCustomerDetail(){
   const mark=()=>{dirty=true;saveBtn.disabled=false;saveBtn.textContent='保存档案'};
   const inp=(k,extra={})=>h('input',{class:'field',value:draft[k]||'',oninput:e=>{draft[k]=e.target.value;mark()},...extra});
   const area=(k,ph)=>{const t=h('textarea',{class:'field area',placeholder:ph,oninput:e=>{draft[k]=e.target.value;mark()}});t.value=draft[k]||'';return t};
-  const back=()=>{drawerView='customers';draft=null;dirty=false;renderDrawer()};
+  const back=()=>{drawerOpen=false;draft=null;dirty=false;renderDrawer()};
   const close=()=>{drawerOpen=false;draft=null;dirty=false;renderDrawer()};
   const saveBtn=h('button',{class:'btn dark',disabled:true,async onclick(){
     saveBtn.disabled=true;saveBtn.textContent='保存中…';
@@ -1161,9 +1182,9 @@ function renderCustomerDetail(){
   const looks=custLooks(p);
   const prevTop=have?have.scrollTop:0;
   const el=h('div',{class:'drawer wide detail'+(have?' still':''),'data-pid':p.id,role:'dialog','aria-label':'客户详情'},
-    h('h3',{},h('span',{},h('button',{class:'link',onclick:back},'‹ 客户列表')),h('button',{class:'link',onclick:close},'关闭')),
+    h('h3',{},h('span',{},h('button',{class:'link',onclick:back},'‹ 返回档案库')),h('button',{class:'link',onclick:close},'关闭')),
     h('div',{class:'dhead'},h('b',{class:'dname'},p.name),stageBadge({stage:draft.stage}),
-      h('button',{class:'btn',style:'margin-left:auto',onclick:()=>{if(dirty&&!confirm('档案改动还没保存，先切换会丢掉。继续？'))return;switchTo(p.id);close()}},'用 TA 试穿方案 →')),
+      h('button',{class:'btn',style:'margin-left:auto',onclick:()=>{if(dirty&&!confirm('档案改动还没保存，先切换会丢掉。继续？'))return;switchTo(p.id);close();closeCustLib()}},'用 TA 试穿方案 →')),
     h('div',{class:'sect'},h('h4',{},'基本信息'),
       h('div',{class:'grid2'},fld('姓名',inp('name',{maxlength:40})),fld('电话',inp('phone',{maxlength:30,inputmode:'tel'})),fld('微信',inp('wechat',{maxlength:40})),
         fld('公司 / 单位',inp('company',{maxlength:60})),
@@ -1238,13 +1259,13 @@ function renderSettingsKeep(){   /* 输入时只更新保存按钮，不重画�
 }
 function toast(t){const e=h('div',{class:'toast'},t);document.body.append(e);setTimeout(()=>e.remove(),2200)}
 $('open-settings').addEventListener('click',openSettings);
-$('who').addEventListener('click',()=>openDrawer('customers'));
+$('who').addEventListener('click',openCustLib);
 
 /* ---------- 服装库：上传、整理、改名、改款式、删除、排序都在这里；衣橱页面只负责挑衣服 ---------- */
 const LIBCATS=['jacket','shirt','polo','pants','belt','shoes','hat','accessory','model'];
 LABEL.model='模特';
 let libOpen=false, libCat='', libG='all', libBusy=null, libDrag=false;
-function openLibrary(cat){libOpen=true;if(cat&&LIBCATS.includes(cat))libCat=cat;renderLibrary()}
+function openLibrary(cat){clibOpen=false;renderCustLib();libOpen=true;if(cat&&LIBCATS.includes(cat))libCat=cat;renderLibrary()}
 function closeLibrary(){libOpen=false;renderLibrary()}
 async function tidyIt(i){
   if(libBusy)return;
@@ -1309,6 +1330,7 @@ function renderLibrary(){
   box.replaceChildren(view);box.scrollTop=keepTop;
 }
 $('open-lib').addEventListener('click',()=>openLibrary());
+$('open-clib').addEventListener('click',openCustLib);
 
 refresh().catch(e=>say(e.message));
 
