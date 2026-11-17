@@ -1,6 +1,6 @@
 """SQLite 存储：衣橱单品、搭配、客户档案、设置都放在 data/closet.db 一个文件里。
 
-对 app.py 保持原来的用法：db_load() 读出一个字典，改完 db_save(db) 存回去。
+对 dcloset_app.py 保持原来的用法：db_load() 读出一个字典，改完 db_save(db) 存回去。
 存回去时只写有变化的行，整个过程在一个事务里，写到一半断电不会留下半截数据。
 老的 data/db.json 第一次启动时自动导入，原文件改名为 db.json.migrated 留作备份。
 """

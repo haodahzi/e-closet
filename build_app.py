@@ -16,7 +16,7 @@ args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--window
         "--paths", str(ROOT),
         "--hidden-import", "multipart", "--hidden-import", "pillow_heif",
         # 项目自己的模块：app 是在函数里才 import 的，明确告诉 PyInstaller 一并打进去
-        "--hidden-import", "app", "--hidden-import", "db", "--hidden-import", "providers",
+        "--hidden-import", "dcloset_app", "--hidden-import", "db", "--hidden-import", "providers",
         "--hidden-import", "settings", "--hidden-import", "palette",
         "--collect-submodules", "uvicorn", "--collect-submodules", "webview"]
 if importlib.util.find_spec("rembg"):              # 本地抠图（可选）；装了就一起打进去

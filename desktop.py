@@ -58,7 +58,7 @@ def main():
         sys.stdout = sys.stderr = log
 
     import uvicorn
-    import app as appmod
+    import dcloset_app as appmod
 
     port = free_port()
     server = uvicorn.Server(uvicorn.Config(appmod.app, host="127.0.0.1", port=port, log_level="warning", log_config=None))

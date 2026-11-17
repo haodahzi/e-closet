@@ -20,6 +20,19 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements-desktop.txt
       - run: python build_app.py
+      - name: Diagnostics - what PyInstaller bundled
+        if: always()
+        shell: python
+        run: |
+          import glob
+          for f in glob.glob("build/D-Closet/warn-D-Closet.txt"):
+              print("== warnings mentioning our modules ==")
+              for l in open(f, encoding="utf-8", errors="replace"):
+                  if any(k in l for k in ("named app", "named dcloset_app", "named db ", "named providers", "named settings", "named palette")):
+                      print(l.rstrip())
+          for f in glob.glob("build/D-Closet/PYZ-00.toc"):
+              t = open(f, encoding="utf-8", errors="replace").read()
+              print("== PYZ has dcloset_app:", "'dcloset_app'" in t, "| fastapi:", "'fastapi'" in t, "| providers:", "'providers'" in t)
       - name: Smoke test - start the packaged app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

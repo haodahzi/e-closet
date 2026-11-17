@@ -132,7 +132,7 @@ aitryon-plus 官方标价 0.5 元/张；精修、通义图像编辑、可灵试�
 
 ## 换模型
 
-模型名都在“设置”里改（也可以写在 `.env`，见 `.env.example`）。要接新的一家，在 `providers.py` 里加一组函数，再在 `app.py` 的 `build_plan` 里加一条流程。
+模型名都在“设置”里改（也可以写在 `.env`，见 `.env.example`）。要接新的一家，在 `providers.py` 里加一组函数，再在 `dcloset_app.py` 的 `build_plan` 里加一条流程。
 
 ## 已知限制
 
