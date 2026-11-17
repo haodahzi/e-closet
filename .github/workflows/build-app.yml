@@ -1,0 +1,30 @@
+name: Build desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-desktop.txt
+      - run: python build_app.py
+      - name: Zip (macOS)
+        if: runner.os == 'macOS'
+        run: cd dist && ditto -c -k --sequesterRsrc --keepParent D-Closet.app D-Closet-mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: D-Closet-${{ runner.os }}
+          path: |
+            dist/D-Closet
+            dist/D-Closet-mac.zip

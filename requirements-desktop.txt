@@ -1,0 +1,3 @@
+-r requirements.txt
+pywebview>=5.0   # 原生窗口；没装也能用，会退回默认浏览器
+pyinstaller>=6.0 # 只有打包成 .exe / .app 时才需要

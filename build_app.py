@@ -1,0 +1,23 @@
+"""把 D-Closet 打包成桌面应用（在哪个系统上跑，就打出哪个系统的版本）。
+
+    pip install -r requirements.txt pywebview pyinstaller
+    python build_app.py
+
+输出：dist/D-Closet/（Windows，里面的 D-Closet.exe）或 dist/D-Closet.app（macOS）。
+"""
+import importlib.util, os, subprocess, sys
+from pathlib import Path
+
+ROOT = Path(__file__).parent
+sep = os.pathsep
+args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "D-Closet",
+        "--add-data", f"static{sep}static", "--add-data", f"assets{sep}assets",
+        "--icon", str(ROOT / "assets" / ("icon.ico" if sys.platform == "win32" else "icon.png")),
+        "--hidden-import", "multipart", "--hidden-import", "pillow_heif",
+        "--collect-submodules", "uvicorn", "--collect-submodules", "webview"]
+if importlib.util.find_spec("rembg"):              # 本地抠图（可选）；装了就一起打进去
+    args += ["--collect-all", "rembg", "--collect-all", "onnxruntime", "--collect-all", "pymatting"]
+else:
+    print("没装 rembg：打出来的应用没有本地抠图（单品会用简单的去白底），其余功能不受影响。")
+args.append("desktop.py")
+sys.exit(subprocess.call(args, cwd=ROOT))

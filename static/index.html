@@ -44,10 +44,6 @@ button{cursor:pointer}
 .rod::before,.rod::after{content:"";position:absolute;top:-9px;width:16px;height:27px;border-radius:4px;
   background:linear-gradient(90deg,#d9d9d9,#f6f6f6 45%,#b9b9b9);box-shadow:0 2px 4px rgba(0,0,0,.18)}
 .rod::before{left:-8px}.rod::after{right:-8px}
-.railadd{position:relative;flex:0 0 96px;height:120px}
-.railadd .hook{width:20px;margin-left:-10px;height:29px;top:0}
-.railadd button{position:absolute;left:50%;top:27px;width:72px;height:72px;margin-left:-36px;border:1.5px dashed var(--faint);border-radius:var(--r);background:none;color:var(--soft);font-size:22px;font-weight:300}
-.railadd button:hover{border-color:var(--ink);color:var(--ink)}
 /* 衣服只在衣杆两端支架之间挂：挂得多就互相挤，不会滑出去 */
 .rail{position:relative;display:flex;justify-content:center;align-items:flex-start;margin:0 46px;padding-bottom:16px;min-height:330px}
 .hang{position:relative;flex:0 1 58px;min-width:9px;height:312px;transition:flex-basis .6s var(--ease),flex-shrink .6s}
@@ -77,19 +73,11 @@ button{cursor:pointer}
 .x{position:absolute;width:22px;height:22px;border-radius:50%;border:0;background:rgba(255,255,255,.92);font-size:13px;line-height:22px;padding:0;color:var(--soft);opacity:0;z-index:4}
 .x:hover{color:var(--danger)}
 /* 整理衣柜：点了才出现改名、整理、拿走，平时界面上没有这些字 */
-.tidybtn{position:absolute;right:28px;top:0;border:0;border-radius:999px;background:var(--card);padding:4px 13px;font-size:12px;color:var(--soft);box-shadow:0 1px 3px rgba(0,0,0,.06);z-index:3}
-.tidybtn:hover{color:var(--ink)}
-.tidybtn[aria-pressed="true"]{background:var(--ink);color:#fff}
 .caption .tb{display:flex;gap:6px;height:24px;align-items:center}
 .caption .tb button{border:0;border-radius:999px;background:var(--card);font-size:12px;line-height:20px;padding:2px 12px;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.07)}
 .caption .tb button:hover{background:var(--ink);color:#fff}
 .caption .tb button.del:hover{background:var(--danger)}
 .caption .tb button:disabled{opacity:.5}
-.tidying .hang[data-id],.tidying .thing[data-id]{cursor:grab}
-.hang.picked .g{filter:none}
-.thing.picked{transform:translateY(-6px) scale(1.12)}
-.thing.picked::before{content:"";position:absolute;bottom:-12px;left:50%;width:22px;height:2px;margin-left:-11px;border-radius:2px;background:var(--ink)}
-.hang.picked::after{content:"";position:absolute;left:50%;top:-6px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;border:1.5px solid var(--ink);z-index:3}
 .dragging{z-index:5;transition:none!important}
 .dragging .sw{filter:drop-shadow(0 16px 18px rgba(40,30,20,.22))}
 .thing:hover .x,.look:hover .x,.x:focus-visible{opacity:1}
@@ -261,6 +249,36 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 .gf{position:absolute;left:18px;top:0;z-index:3}
 .grow{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .gt{margin-left:8px;font:500 11px var(--sans);padding:1px 7px;border-radius:999px;background:var(--tile-hi);color:var(--soft)}
+
+/* ---------- 服装库 ---------- */
+.lib{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--bg) radial-gradient(circle,rgba(0,0,0,.045) 1.6px,transparent 2px) 0 0/34px 34px}
+.libin{max-width:1240px;margin:0 auto;padding:22px 32px 48px}
+.libhead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.libhead h2{margin:0;font:600 26px/1 var(--serif)}
+.libhead .sp{flex:1}
+.libcats{margin-bottom:14px}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:16px}
+.lcard{background:var(--card);border-radius:var(--r);padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:default}
+.lcard[draggable="true"]{cursor:grab}
+.lcard.dragging{opacity:.4}
+.lph{position:relative;aspect-ratio:3/4;background:var(--tile);border-radius:var(--r-sm);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.lph img{width:100%;height:100%;object-fit:contain;display:block}
+.lph.model img{object-fit:cover;object-position:top}
+.lbusy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.75);font-size:13px}
+.lname{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;margin-top:8px;font-size:13px}
+.lname b{font-weight:600;margin-right:2px;word-break:break-all}
+.gt.ok{background:#DDEBDD;color:#2F6B3A}
+.lname .gt{margin-left:0;margin-right:4px}
+.lact{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:6px}
+.lact .link{font-size:12px;padding:2px 0}
+.lact .link.del{color:var(--danger)}
+.lact .link:disabled{opacity:.4;cursor:wait}
+.lempty{padding:60px 0;text-align:center;color:var(--soft)}
+@media (max-width:700px){.libin{padding:16px}}
+.mpick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 4px}
+.mpick button{border:1px solid var(--line);background:var(--card);border-radius:var(--r-sm);padding:6px;text-align:center;font-size:12px}
+.mpick button:hover{border-color:var(--ink)}
+.mpick img{width:100%;aspect-ratio:3/4;object-fit:cover;object-position:top;border-radius:8px;background:var(--tile);display:block;margin-bottom:4px}
 /* ---------- 客户档案 ---------- */
 .drawer.wide{width:min(600px,100%)}
 .drawer.still{animation:none}
@@ -303,6 +321,18 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 .x2{border:0;background:none;color:var(--faint);font-size:16px;line-height:1}
 .x2:hover{color:var(--danger)}
 @media (max-width:560px){.grid2{grid-template-columns:1fr}.mgrid{grid-template-columns:repeat(2,1fr)}}
+function pickModel(pid){
+  const models=S.items.filter(i=>i.category==='model').sort((a,b)=>a.created-b.created);
+  const close=()=>{$('layer').replaceChildren();renderDrawer()};
+  const body=models.length?h('div',{class:'mpick'},...models.map(m=>h('button',{async onclick(){
+      try{await api(`/api/profiles/${encodeURIComponent(pid)}/model`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model_id:m.id})});
+        close();await refresh();const p=profiles().find(x=>x.id===pid);if(p&&p.photos.length){sel.person=p.photos[p.photos.length-1].id;viewing=null;keep();render()}}catch(e){alert(e.message)}}},
+    h('img',{src:src(m),alt:''}),nameOf(m),gtag(m)))):h('p',{class:'muted'},'服装库里还没有模特。到“服装库 → 模特”上传一个。');
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'选择模特'},h('h3',{},'给 TA 放一个模特'),body,
+      h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消')))));
+}
+
 /* ---------- 设置 ---------- */
 .sheet.setp{width:min(860px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column}
 .sheet.setp h3{display:flex;justify-content:space-between;align-items:baseline}
@@ -335,6 +365,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
   <div class="brand">D<i>-</i>Closet</div>
   <button class="who" id="who" title="客户档案：切换客户、查看和修改资料">客户档案</button>
   <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
+  <button class="link" id="open-lib">服装库</button>
   <button class="link" id="open-photos">客户照片</button>
   <button class="link" id="open-settings">⚙ 设置</button>
 </header>
@@ -343,7 +374,6 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
   <section class="closet" aria-label="衣橱">
     <div class="rack">
       <div class="seg2 gf" id="gf" aria-label="按性别筛选衣橱"></div>
-      <button class="tidybtn" id="tidybtn" aria-pressed="false" title="改名、拿走，拖动换位置">整理衣柜</button>
       <div class="rod"></div>
       <div class="rail" id="rail"></div>
       <div class="caption" id="caption" aria-live="polite"></div>
@@ -382,6 +412,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 </div>
 
 <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+<div id="lib" class="lib" hidden></div>
 <div id="layer"></div>
 <div id="slayer"></div>
 <div class="cur" id="cur" aria-hidden="true"><svg class="b" viewBox="0 0 22 22">
@@ -411,9 +442,8 @@ function h(tag,attrs={},...kids){const e=document.createElement(tag);
 const hoverable=matchMedia('(hover:hover)').matches;
 
 let S={items:[],looks:[],config:{}};
-let tidyMode=false, picked=null, drag=null, dragEnd=0;
 let beltNote=false, job=null, viewing=null, peek=false, est=null, estKey='', estTimer=null, portraiting=null, hovered=null;
-const GARMENT_CATS=['shirt','polo','jacket','pants','belt','shoes','hat','accessory'];
+const GARMENT_CATS=['shirt','polo','jacket','pants','belt','shoes','hat','accessory','model'];
 const TOPS=['shirt','polo','jacket'], RAILCATS=['jacket','shirt','polo','pants'], SHELF=['shoes','belt','hat','accessory'];
 const GLABEL={man:'男款',woman:'女款',unisex:'通用'};
 const slotOf=i=>i.category==='polo'?'shirt':i.category;   /* POLO衫和衬衫占同一个“上衣”位 */
@@ -443,7 +473,7 @@ async function refresh(){
   if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){$('demo').hidden=!S.config.demo;renderWho();renderGf();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
+function render(){$('demo').hidden=!S.config.demo;renderWho();renderGf();renderLibrary();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
 /* 整个界面放在一屏里：电脑上窗口不够高时，把衣杆整体缩小到刚好放下，不用往下滚 */
 function fitPage(){
   const r=document.querySelector('.rack'), de=document.documentElement;
@@ -468,25 +498,6 @@ function wearIt(i){
   if(i.category==='belt'&&sel.belt&&sel.tuck==='out'){sel.tuck='in';beltNote=true}
   viewing=null;say('');keep();render();
 }
-/* ---------- 整理衣柜：点了才出现改名、整理、拿走；可以拖动换位置 ---------- */
-function setTidy(on){
-  tidyMode=on;picked=null;
-  $('tidybtn').setAttribute('aria-pressed',String(on));$('tidybtn').textContent=on?'完成':'整理衣柜';
-  document.querySelector('.closet').classList.toggle('tidying',on);
-  setHover(hovered);
-}
-function pick(i){picked=picked===i.id?null:i.id;setHover(hovered)}
-function tidyCaption(){
-  const i=picked&&item(picked), hv=!i&&hovered&&item(hovered);
-  if(i){
-    const tb=h('div',{class:'tb'},h('button',{onclick:()=>renameSheet(i)},'改名'),
-      h('button',{class:'del',onclick:()=>remove(i)},'拿走'));
-    $('caption').replaceChildren(h('b',{},nameOf(i)),tb);
-  }else if(hv)$('caption').replaceChildren(h('b',{},nameOf(hv)),h('span',{},'点一下选中 · 按住拖动换位置'));
-  else $('caption').replaceChildren(h('span',{},'点一件选中，再改名或拿走；按住拖动可以换位置'));
-}
-$('tidybtn').addEventListener('click',()=>setTidy(!tidyMode));
-addEventListener('keydown',e=>{if(e.key==='Escape'&&tidyMode&&!$('layer').children.length)setTidy(false)});
 /* 按顺序排：拖过的按拖好的顺序；新挂上的排在最前面 */
 const byOrder=(a,b)=>(a.order??-1e9)-(b.order??-1e9)||b.created-a.created;
 /* ---------- 男款 / 女款：衣橱按性别筛。默认跟着当前客户的性别走；通用款和老单品（没标过性别）两边都显示 ---------- */
@@ -501,41 +512,13 @@ function renderGf(){
   box.replaceChildren(...[['all','全部'],['man','男款'],['woman','女款']].map(([k,t])=>h('button',{type:'button','aria-pressed':String(gf===k),
     onclick:()=>{gf=k;gfAuto=false;railKey='';render()}},t)));
 }
-/* 拖动换位置（只在整理衣柜时）：衬衫只和衬衫换，裤子只和裤子换；鞋架上的东西之间随便换 */
-const dragJustEnded=()=>Date.now()-dragEnd<250;
-function dragable(el,i){
-  el.addEventListener('pointerdown',e=>{
-    if(!tidyMode||e.button!==0)return;
-    drag={el,i,x:e.clientX,id:e.pointerId,moved:false};
-  });
-}
-function dragGroup(d){
-  return d.el.classList.contains('hang')?[...document.querySelectorAll(`.hang[data-id]`)].filter(e=>item(e.dataset.id).category===d.i.category)
-    :[...document.querySelectorAll('.thing[data-id]')];
-}
-addEventListener('pointermove',e=>{
-  const d=drag;if(!d||e.pointerId!==d.id)return;
-  if(!d.moved){if(Math.abs(e.clientX-d.x)<6)return;d.moved=true;d.el.classList.add('dragging');hovered=d.i.id;picked=d.i.id;setHover(hovered)}
-  const g=dragGroup(d), k=g.indexOf(d.el), mid=x=>{const r=x.getBoundingClientRect();return r.left+r.width/2};
-  if(k<g.length-1&&e.clientX>mid(g[k+1]))g[k+1].after(d.el);       /* 越过右边那件的中线：换到它后面 */
-  else if(k>0&&e.clientX<mid(g[k-1]))g[k-1].before(d.el);
-});
-addEventListener('pointerup',async()=>{
-  const d=drag;drag=null;if(!d||!d.moved)return;
-  d.el.classList.remove('dragging');dragEnd=Date.now();
-  const ids=dragGroup(d).map(e=>e.dataset.id);
-  ids.forEach((id,n)=>{const it=item(id);if(it)it.order=n});
-  railKey=railList().map(i=>i.id+(i.cut||'')+i.name).join()+S.config.demo;   /* 已经摆好了，不用重画 */
-  try{await api('/api/items/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})})}catch(e){say(e.message);await refresh()}
-});
 async function remove(i){
   if(!confirm(`把“${nameOf(i)}”从衣橱里拿走？已经生成的试穿照不受影响。`))return;
-  try{await api('/api/items/'+i.id,{method:'DELETE'});if(picked===i.id)picked=null;await refresh()}catch(e){say(e.message)}
+  try{await api('/api/items/'+i.id,{method:'DELETE'});await refresh()}catch(e){say(e.message)}
 }
 const onRail=id=>id&&item(id)&&RAILCATS.includes(item(id).category);
-const frontId=()=>onRail(hovered)?hovered:tidyMode&&onRail(picked)?picked:null;
+const frontId=()=>onRail(hovered)?hovered:null;
 function caption(){
-  if(tidyMode){tidyCaption();return}
   if(beltNote){beltNote=false;$('caption').replaceChildren(h('b',{},'系上腰带'),h('span',{},'已改成“塞进裤子”，腰带才露得出来；想放在外面可以再改回来'));return}
   const f=frontId()?item(frontId()):hovered&&item(hovered)?item(hovered):null;
   $('caption').replaceChildren(...(f?[h('b',{},nameOf(f),gtag(f)),h('span',{},isOn(f)?'穿着 · 点一下脱下':'点一下穿上')]:
@@ -556,8 +539,7 @@ function ripple(center,strength=1){
 function setHover(id){
   const prev=frontId();
   hovered=id;const f=frontId();
-  document.querySelectorAll('.hang[data-id]').forEach(e=>{e.classList.toggle('front',e.dataset.id===f);e.classList.toggle('picked',tidyMode&&e.dataset.id===picked)});
-  document.querySelectorAll('.thing[data-id]').forEach(e=>e.classList.toggle('picked',tidyMode&&e.dataset.id===picked));
+  document.querySelectorAll('.hang[data-id]').forEach(e=>{e.classList.toggle('front',e.dataset.id===f)});
   document.querySelectorAll('.thing[data-id]').forEach(e=>e.classList.toggle('front',e.dataset.id===hovered));
   if(f&&f!==prev)ripple(f);else if(!f&&prev)ripple(prev,.5);
   /* 布料感：转身时衣摆比领口慢半拍，轻轻荡一下再停 */
@@ -604,12 +586,11 @@ function hangEl(i,n){
     h('span',{class:'mark'}),
     h('div',{class:'sw'},h('div',{class:'g'},(i.fit&&i.fit.own)?h('span',{class:'ownhook',html:HOOK_ONLY}):h('span',{html:i.category==='pants'?PANTS_HOOK:i.category==='belt'?S_HOOK:HANGER}),
       h('button',{class:'pick','aria-pressed':String(isOn(i)),style:shirtFit(i),'aria-label':nameOf(i)+(isOn(i)?'（穿着）':''),
-        onclick(){ if(dragJustEnded())return; if(tidyMode){pick(i);return}
+        onclick(){
           if(!hoverable&&hovered!==i.id){setHover(i.id);return} ripple(i.id,.8);wearIt(i)},
         onfocus(){setHover(i.id)}},img),
       i.category==='pants'&&!(i.fit&&i.fit.own)?h('span',{html:CLIPS}):null)));
-  el.addEventListener('mouseenter',()=>{if(!drag)setHover(i.id)});
-  dragable(el,i);
+  el.addEventListener('mouseenter',()=>setHover(i.id));
   return el;
 }
 let railKey='';
@@ -623,9 +604,8 @@ function renderRail(){
   }
   railKey=key;
   rail.replaceChildren(...list.map(hangEl));
-  rail.onmouseleave=()=>{if(!drag)setHover(null)};
-  rail.append(h('div',{class:'railadd'},h('span',{html:HOOK_ONLY}),h('button',{title:'挂一件衬衫、POLO衫、西装外套或裤子','aria-label':'挂一件',onclick:()=>pickFiles('shirt')},'+')));
-  if(!list.length)rail.append(h('div',{class:'railempty'},'衣杆还空着，点右边的“+”挂上衬衫、POLO衫、西装外套和裤子'));
+  rail.onmouseleave=()=>setHover(null);
+  if(!list.length)rail.append(h('div',{class:'railempty'},'衣杆还空着：先到右上角的“服装库”上传衬衫、POLO衫、西装外套和裤子'));
   const keepFront=hovered&&item(hovered)?hovered:null;hovered=null;setHover(keepFront);
 }
 /* Looks 用滚轮也能左右滑 */
@@ -652,15 +632,12 @@ function renderShelf(){
   const list=S.items.filter(i=>SHELF.includes(i.category)&&gvis(i)).sort(byOrder);
   $('shelf').replaceChildren(...list.map(i=>{
     const el=h('div',{class:'thing'+(isOn(i)?' on':''),'data-id':i.id},
-      h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),style:shelfSize(i),onclick:()=>{if(dragJustEnded())return;tidyMode?pick(i):wearIt(i)}},
+      h('button',{class:'pick','aria-pressed':String(isOn(i)),'aria-label':nameOf(i),style:shelfSize(i),onclick:()=>wearIt(i)},
         h('img',{src:cut(i),alt:nameOf(i),draggable:'false',class:i.cut?'':'card'})));
-    el.classList.toggle('picked',picked===i.id);
-    el.addEventListener('mouseenter',()=>{if(drag)return;hovered=i.id;caption()});
-    el.addEventListener('mouseleave',()=>{if(!drag)setHover(null)});
-    dragable(el,i);
+    el.addEventListener('mouseenter',()=>{hovered=i.id;caption()});
+    el.addEventListener('mouseleave',()=>setHover(null));
     return el;
-  }),h('div',{class:'thing add'},h('button',{title:'添加鞋子或配饰',onclick:()=>pickFiles('shoes')},'+')),
-    ...(list.length?[]:[h('span',{class:'muted'},'鞋子和配饰放在这里')]));
+  }),...(list.length?[]:[h('span',{class:'muted'},'鞋子和配饰在“服装库”里上传')]));
 }
 
 /* ---------- 镜子 ---------- */
@@ -863,7 +840,7 @@ function pointTo(cat){
   const el=['shoes','belt','hat','accessory'].includes(cat)?$('shelfwrap'):$('rail');
   el.scrollIntoView({behavior:'smooth',block:'center'});
   if(el.id==='shelfwrap'){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),900)}
-  if(['shoes','hat','belt'].includes(cat)&&!of(cat).length)pickFiles(cat);
+  if(!of(cat).length)openLibrary(cat);   /* 衣橱里还没有这一类：直接去服装库上传 */
 }
 function renderFit(){
   /* 点一下就脱下：轻轻缩小淡出，不另外显示“脱下”两个字 */
@@ -982,23 +959,23 @@ function uploadSheet(files,cat){
   const paintG=()=>gRow.lastChild.replaceChildren(seg2([['man','男款'],['woman','女款'],['unisex','通用']],gender,v=>{gender=v;lastGender=v}));
   paintG();
   const cats=h('div',{class:'cats'});
-  const paint=()=>{cats.replaceChildren(...Object.entries(LABEL).map(([k,v])=>h('button',{'aria-pressed':String(cat===k),onclick:()=>{cat=k;paint()}},v)));
+  const paint=()=>{cats.replaceChildren(...(cat==='person'?[]:Object.entries(LABEL).filter(([k])=>k!=='person')).map(([k,v])=>h('button',{'aria-pressed':String(cat===k),onclick:()=>{cat=k;paint()}},v)));
     name.placeholder=cat==='jacket'?'比如“深蓝双排扣西装”':cat==='polo'?'比如“海军蓝珠地POLO”':cat==='belt'?'比如“棕色皮带 金扣”':cat==='hat'?'比如“灰色棒球帽”':cat==='accessory'?'写清楚是什么：项链、耳环、手表、腰带、包…':cat==='person'?'比如“周末”（可选）':'起个名字，比如“蓝白细条纹”（可选）';
-    tidyRow.hidden=cat==='person';gRow.hidden=cat==='person'};
+    tidyRow.hidden=cat==='person'||cat==='model';gRow.hidden=cat==='person';cats.hidden=cat==='person'};
   paint();
   const close=()=>{urls.forEach(u=>URL.revokeObjectURL(u));$('layer').replaceChildren();if(drawerOpen)renderDrawer()};
   const ok=h('button',{class:'btn dark',async onclick(){
     ok.disabled=true;
     let n=0;
     for(const f of files){
-      ok.textContent=tidy.checked?`整理中 ${++n}/${files.length}…`:'放进衣橱…';
+      ok.textContent=tidy.checked?`整理中 ${++n}/${files.length}…`:'上传中…';
       const fd=new FormData();fd.append('file',f);fd.append('category',cat);fd.append('name',name.value);fd.append('tidy',tidy.checked&&cat!=='person'?'1':'');if(cat!=='person')fd.append('gender',gender);if(cat==='person')fd.append('profile',upProfile);
-      try{const it=await api('/api/items',{method:'POST',body:fd});if(cat==='person'||(cat!=='accessory'&&!sel[cat]))sel[cat]=it.id}catch(e){say(e.message)}
+      try{const it=await api('/api/items',{method:'POST',body:fd});if(cat==='person')sel.person=it.id}catch(e){say(e.message);alert(e.message)}
     }
     close();viewing=null;await refresh();
-  }},'放进衣橱');
+  }},'放进服装库');
   $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
-    h('div',{class:'sheet',role:'dialog','aria-label':'添加单品'},h('h3',{},'这是什么？'),
+    h('div',{class:'sheet',role:'dialog','aria-label':'添加单品'},h('h3',{},cat==='person'?'添加客户照片':'上传到服装库'),
       h('div',{class:'previews'},urls.map(u=>h('img',{src:u,alt:''}))),cats,gRow,name,tidyRow,
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),ok))));
   name.focus();
@@ -1083,7 +1060,7 @@ function renderDrawer(){
     h('button',{class:'pick',onclick:()=>{sel.person=i.id;viewing=null;keep();render()}},h('img',{src:src(i),alt:i.name||'照片'})),
     h('button',{class:'x','aria-label':'删除',onclick:()=>remove(i)},'×'),
     h('div',{class:'tag'},i.name||'照片'),
-    i.from?null:h('button',{class:'mk',disabled:!!portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
+    i.from||i.model_from?null:h('button',{class:'mk',disabled:!!portraiting||!!job,title:'保持你的长相和身材，换成正面站姿、贴身基础款、干净背景'+(S.config.portrait_cost?`，约 ¥${S.config.portrait_cost.toFixed(2)}`:''),
       async onclick(){portraiting=i.id;renderDrawer();say('');
         try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep()}catch(e){say(e.message)}
         finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照'),
@@ -1103,7 +1080,8 @@ function renderDrawer(){
       h('div',{class:'pgroup'},h('div',{class:'photos'},h('button',{class:'addp',onclick:()=>{upProfile='';pickFiles('person')}},all.some(p=>p.photos.length)?'+ 新的客户':'+ 添加照片'))))));
 }
 $('open-photos').addEventListener('click',()=>openDrawer('photos'));
-addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('slayer').firstChild)return closeSettings();drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren()});
+addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('slayer').firstChild)return closeSettings();
+  if(!$('layer').firstChild&&libOpen)return closeLibrary();drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren()});
 
 /* ---------- 客户档案 ---------- */
 const STAGE_CLS={'线索':'s0','已量体':'s1','方案中':'s2','已报价':'s3','已成交':'s4','已流失':'s5'};
@@ -1153,17 +1131,18 @@ function renderCustomers(){
 }
 function newCustomer(){
   const name=h('input',{class:'field',maxlength:40,placeholder:'客户姓名或称呼，比如“张总”'});
-  let kind='个人定制';
+  let kind='个人定制', gender=(S.config.default_gender||'man');
   const company=h('input',{class:'field',maxlength:60,placeholder:'公司 / 单位（可选）'});
   const close=()=>{$('layer').replaceChildren();renderDrawer()};
   const save=async()=>{
     if(!name.value.trim()){name.focus();return}
-    try{const c=await api('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value,company:company.value,kind})});
+    try{const c=await api('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value,company:company.value,kind,gender})});
       await refresh();detailPid=c.id;draft=null;dirty=false;drawerView='detail';switchTo(c.id);close()}catch(e){say(e.message)}};
   name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
   $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
     h('div',{class:'sheet',role:'dialog','aria-label':'新客户'},h('h3',{},'新建客户档案'),name,
-      h('div',{style:'margin:14px 0 4px'},seg2([['个人定制','个人定制'],['企业工服','企业工服']],kind,v=>kind=v)),company,
+      h('div',{style:'margin:14px 0 8px'},seg2([['个人定制','个人定制'],['企业工服','企业工服']],kind,v=>kind=v)),h('div',{style:'margin:0 0 4px'},seg2([['man','男'],['woman','女']],gender,v=>gender=v)),company,
+      h('p',{class:'muted',style:'margin:8px 0 0'},'建档后会先配一个默认模特，不用等拍照就能试穿方案；之后可以换成客户本人的照片。'),
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'建档')))));
   name.focus();
 }
@@ -1196,7 +1175,8 @@ function renderCustomerDetail(){
       const keep=dirty;await refresh();dirty=keep}catch(e){alert(e.message)}};
   logIn.addEventListener('keydown',e=>{if(e.key==='Enter')addLog()});
   const photos=h('div',{class:'thumbs'},...p.photos.slice().reverse().map(i=>h('img',{src:src(i),alt:'',onclick:()=>{sel.person=i.id;viewing=null;curPid=p.id;keep();render()}})),
-    h('button',{class:'addt',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 照片'));
+    h('button',{class:'addt',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 照片'),
+    h('button',{class:'addt',onclick:()=>pickModel(p.id)},'+ 模特'));
   const looks=custLooks(p);
   const prevTop=have?have.scrollTop:0;
   const el=h('div',{class:'drawer wide detail'+(have?' still':''),'data-pid':p.id,role:'dialog','aria-label':'客户详情'},
@@ -1277,6 +1257,76 @@ function renderSettingsKeep(){   /* 输入时只更新保存按钮，不重画�
 function toast(t){const e=h('div',{class:'toast'},t);document.body.append(e);setTimeout(()=>e.remove(),2200)}
 $('open-settings').addEventListener('click',openSettings);
 $('who').addEventListener('click',()=>openDrawer('customers'));
+
+/* ---------- 服装库：上传、整理、改名、改款式、删除、排序都在这里；衣橱页面只负责挑衣服 ---------- */
+const LIBCATS=['jacket','shirt','polo','pants','belt','shoes','hat','accessory','model'];
+LABEL.model='模特';
+let libOpen=false, libCat='', libG='all', libBusy=null, libDrag=false;
+function openLibrary(cat){libOpen=true;if(cat&&LIBCATS.includes(cat))libCat=cat;renderLibrary()}
+function closeLibrary(){libOpen=false;renderLibrary()}
+async function tidyIt(i){
+  if(libBusy)return;
+  const cost=S.config.tidy_cost?`，约 ¥${S.config.tidy_cost.toFixed(2)}`:'';
+  if(!confirm(`用 AI 把“${nameOf(i)}”整理成干净的白底单品图${cost}？原图会保留，不满意可以还原。`))return;
+  libBusy=i.id;say('');renderLibrary();
+  try{await api(`/api/items/${i.id}/tidy`,{method:'POST'});railKey=''}catch(e){alert(e.message)}
+  finally{libBusy=null;await refresh()}
+}
+async function untidyIt(i){
+  if(libBusy)return;
+  try{await api(`/api/items/${i.id}/untidy`,{method:'POST'});railKey='';await refresh()}catch(e){alert(e.message)}
+}
+function renderLibrary(){
+  const box=$('lib');
+  if(!libOpen){box.hidden=true;box.replaceChildren();document.body.classList.remove('nolock');return}
+  if(libDrag)return;
+  box.hidden=false;
+  const keepTop=box.scrollTop;
+  const inG=i=>libG==='all'||!i.gender||i.gender==='unisex'||i.gender===libG;
+  const all=S.items.filter(i=>LIBCATS.includes(i.category)&&inG(i));
+  const list=all.filter(i=>!libCat||i.category===libCat).sort((a,b)=>i2(a)-i2(b)||byOrder(a,b));
+  function i2(i){return libCat?0:LIBCATS.indexOf(i.category)}
+  const chip=(k,t,n)=>h('button',{'aria-pressed':String(libCat===k),onclick:()=>{libCat=k;renderLibrary()}},`${t} ${n}`);
+  const card=i=>{
+    const garment=i.category!=='model', busy=libBusy===i.id;
+    const el=h('div',{class:'lcard'+(busy?' busy':''),'data-id':i.id,draggable:libCat?'true':'false'},
+      h('div',{class:'lph'+(i.category==='model'?' model':'')},h('img',{src:i.category==='model'?src(i):cut(i),alt:nameOf(i),draggable:'false',loading:'lazy'}),
+        busy?h('span',{class:'lbusy'},'整理中…'):null),
+      h('div',{class:'lname'},h('b',{},nameOf(i)),gtag(i),i.builtin?h('span',{class:'gt'},'默认'):null,
+        !libCat?h('span',{class:'gt'},LABEL[i.category]):null,i.orig?h('span',{class:'gt ok'},'已整理'):null),
+      h('div',{class:'lact'},h('button',{class:'link',onclick:()=>renameSheet(i)},'改名 / 款式'),
+        garment&&!i.orig?h('button',{class:'link',disabled:!!libBusy,title:'AI 整理成白底单品图，衣杆上更好看、换装更准',onclick:()=>tidyIt(i)},'整理成单品图'):null,
+        i.orig?h('button',{class:'link',disabled:!!libBusy,onclick:()=>untidyIt(i)},'还原原图'):null,
+        h('button',{class:'link del',disabled:!!libBusy,onclick:()=>remove(i)},'删除')));
+    if(libCat){   /* 选了一个品类才能拖动排序：衣杆上就按这个顺序挂 */
+      el.addEventListener('dragstart',e=>{libDrag=true;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',i.id)});
+      el.addEventListener('dragend',async()=>{
+        el.classList.remove('dragging');libDrag=false;
+        const ids=[...box.querySelectorAll('.lcard[data-id]')].map(x=>x.dataset.id);
+        ids.forEach((id,n)=>{const it=item(id);if(it)it.order=n});railKey='';
+        try{await api('/api/items/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})})}catch(er){alert(er.message)}
+        render();
+      });
+      el.addEventListener('dragover',e=>{e.preventDefault();const d=box.querySelector('.lcard.dragging');if(!d||d===el)return;
+        const r=el.getBoundingClientRect(), after=e.clientX>r.left+r.width/2;after?el.after(d):el.before(d)});
+    }
+    return el;
+  };
+  const upCatNow=libCat||'shirt';
+  const gseg=h('div',{class:'seg2'},...[['all','全部'],['man','男款'],['woman','女款']].map(([k,t])=>h('button',{type:'button','aria-pressed':String(libG===k),onclick:()=>{libG=k;renderLibrary()}},t)));
+  const view=h('div',{class:'libin'},
+    h('div',{class:'libhead'},h('button',{class:'link',onclick:closeLibrary},'‹ 返回衣橱'),h('h2',{},'服装库'),
+      h('span',{class:'muted'},'上传、整理、改名、排序都在这里；衣橱页面只负责挑衣服试穿'),
+      h('span',{class:'sp'}),gseg,
+      h('button',{class:'btn dark',onclick:()=>pickFiles(upCatNow)},'+ 上传'+(libCat?LABEL[libCat]:'服装'))),
+    h('div',{class:'cats libcats'},chip('','全部',all.length),...LIBCATS.map(c=>chip(c,LABEL[c],all.filter(i=>i.category===c).length))),
+    libCat?h('p',{class:'muted',style:'margin:0 0 10px'},'按住卡片左右拖动可以排顺序，衣杆上就按这个顺序挂。'):null,
+    list.length?h('div',{class:'lgrid'},...list.map(card))
+      :h('div',{class:'lempty'},all.length?'这一类里没有符合条件的。':'服装库还是空的。点右上角“+ 上传”，一次可以选好几张。',
+        libCat==='model'?h('p',{class:'muted'},'这里放默认模特：新客户建档时按性别自动配一个。想用写实模特，上传你有授权的模特全身照（正面站立、白底最好）。'):null));
+  box.replaceChildren(view);box.scrollTop=keepTop;
+}
+$('open-lib').addEventListener('click',()=>openLibrary());
 
 refresh().catch(e=>say(e.message));
 

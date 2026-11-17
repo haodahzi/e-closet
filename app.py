@@ -3,7 +3,7 @@
 启动:  python app.py   然后浏览器打开 http://127.0.0.1:8000
 换装走云端模型（阿里云百炼 / 可灵 / fal.ai，见 providers.py），没填 key 时自动进入演示模式（不花钱）。
 """
-import asyncio, hashlib, io, json, os, threading, time, uuid, webbrowser
+import asyncio, hashlib, io, json, os, shutil, sys, threading, time, uuid, webbrowser
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,7 +21,26 @@ except Exception:
     pass
 
 ROOT = Path(__file__).parent
-DATA, ITEMS, RESULTS = ROOT / "data", ROOT / "data" / "items", ROOT / "data" / "results"
+FROZEN = getattr(sys, "frozen", False)                       # 打包成桌面应用后为 True
+BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))                # 只读资源（页面、默认模特）所在的目录
+
+
+def user_home():
+    """数据放哪：环境变量 DCLOSET_HOME > 打包后的应用数据目录 > 源码目录（和以前一样）。"""
+    if os.environ.get("DCLOSET_HOME"):
+        return Path(os.environ["DCLOSET_HOME"]).expanduser()
+    if FROZEN:
+        if sys.platform == "win32":
+            return Path(os.environ.get("APPDATA", Path.home())) / "D-Closet"
+        if sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "D-Closet"
+        return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "d-closet"
+    return ROOT
+
+
+HOME = user_home()
+HOME.mkdir(parents=True, exist_ok=True)
+DATA, ITEMS, RESULTS = HOME / "data", HOME / "data" / "items", HOME / "data" / "results"
 DBF = DATA / "db.json"          # 老版本的存储，第一次启动时导入 SQLite
 DBPATH = DATA / "closet.db"
 for d in (ITEMS, RESULTS):
@@ -29,7 +48,7 @@ for d in (ITEMS, RESULTS):
 
 
 def load_env():
-    p = ROOT / ".env"
+    p = HOME / ".env"
     if not p.exists():
         return
     for line in p.read_text(encoding="utf-8").splitlines():
@@ -78,7 +97,7 @@ def reload_config():
 
 reload_config()
 
-CATEGORIES = {"person", "shirt", "polo", "jacket", "pants", "belt", "shoes", "hat", "accessory"}
+CATEGORIES = {"person", "model", "shirt", "polo", "jacket", "pants", "belt", "shoes", "hat", "accessory"}
 TOPS = ("shirt", "polo", "jacket")           # 挂在衣杆上的上装（衬衫和POLO衫占同一个“上衣”位，西装外套单独一个位）
 HANGED = (*TOPS, "pants")                    # 挂在衣杆上的（其余放鞋架）
 GENDERS = ("man", "woman", "unisex")         # 单品性别：男款 / 女款 / 通用
@@ -1053,6 +1072,48 @@ async def run_job(job, req: TryOn, plan):
         job.update(status="error", error=friendly(e))
 
 
+# ---------------------------------------------------------------- 默认模特
+BUILTIN_MODELS = [("model_man", "男模特 · 标准", "man", "man.jpg"), ("model_woman", "女模特 · 标准", "woman", "woman.jpg")]
+
+
+def seed_models():
+    """内置的默认模特放进服装库的“模特”里（删掉的不会再变回来）。想用写实模特，自己在服装库里上传。"""
+    with _lock:
+        db = db_load()
+        gone, changed = db.get("models_removed", []), False
+        for n, (mid, name, g, f) in enumerate(BUILTIN_MODELS):
+            src = BUNDLE / "assets" / "models" / f
+            if mid in db["items"] or mid in gone or not src.exists():
+                continue
+            normalize_image(src.read_bytes()).save(ITEMS / f"{mid}.jpg", quality=92)
+            db["items"][mid] = {"id": mid, "category": "model", "name": name, "file": f"{mid}.jpg", "gender": g,
+                                "builtin": True, "created": time.time() + n}
+            changed = True
+        if changed:
+            db_save(db)
+
+
+def attach_model(db, pid, gender, model_id=None):
+    """给客户放一张默认模特照片：复制一份成这位客户自己的“照片”（后面可以换成客户本人的）。"""
+    models = [m for m in db["items"].values() if m["category"] == "model"]
+    m = db["items"].get(model_id or "") if model_id else None
+    if m and m["category"] != "model":
+        m = None
+    if not m:
+        pool = [x for x in models if x.get("gender") in (gender, "unisex")] or models
+        m = sorted(pool, key=lambda x: (not x.get("builtin"), x["created"]))[0] if pool else None
+    if not m or not (ITEMS / m["file"]).exists():
+        return None
+    nid = uuid.uuid4().hex[:12]
+    shutil.copyfile(ITEMS / m["file"], ITEMS / f"{nid}.jpg")
+    it = {"id": nid, "category": "person", "name": m.get("name") or "默认模特", "file": f"{nid}.jpg",
+          "created": time.time(), "profile": pid, "model_from": m["id"]}
+    db["items"][nid] = it
+    return it
+
+
+seed_models()
+
 # ---------------------------------------------------------------- 接口
 app = FastAPI(title="衬衫衣橱")
 # 只开放图片目录：closet.db 里有 API Key 和客户资料，不能被浏览器直接下载
@@ -1062,7 +1123,7 @@ app.mount("/media/results", StaticFiles(directory=RESULTS), name="media-results"
 
 @app.get("/")
 def index():
-    return FileResponse(ROOT / "static" / "index.html")
+    return FileResponse(BUNDLE / "static" / "index.html")
 
 
 def strip_demo_bar(path):
@@ -1116,7 +1177,7 @@ def state():
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "profiles": db.get("profiles", {}),
-            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "genders": list(GENDERS), "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
+            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "genders": list(GENDERS), "default_gender": P.env("GENDER", "man"), "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
@@ -1138,7 +1199,7 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     item_id = uuid.uuid4().hex[:12]
     item = {"id": item_id, "category": category, "name": name.strip()[:40], "file": f"{item_id}.jpg",
             "created": time.time()}
-    if category in GARMENTS:   # 单品分男款 / 女款 / 通用；没选的当通用
+    if category in GARMENTS or category == "model":   # 单品分男款 / 女款 / 通用；没选的当通用
         item["gender"] = gender if gender in GENDERS else "unisex"
     if category == "person" and profile.strip():
         item["profile"] = profile.strip()[:40]
@@ -1169,6 +1230,63 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     return item
 
 
+@app.post("/api/items/{item_id}/tidy")
+async def tidy_item(item_id: str):
+    """在服装库里把一件已经入库的衣服整理成干净的白底单品图（原图留着，可以还原）。"""
+    it = db_load()["items"].get(item_id)
+    if not it or it["category"] not in GARMENTS:
+        raise HTTPException(404, "这件单品已经被删除。")
+    if it.get("orig"):
+        raise HTTPException(400, "这件已经整理过了；想要原图，点“还原”。")
+    if MOCK:
+        raise HTTPException(400, "演示模式下不能整理：先在“设置”里填即梦（火山方舟）的 key。")
+    if not P.ready(EDITOR):
+        raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，设置里还没填它的 key。")
+    orig = f"{item_id}_orig.jpg"
+    shutil.copyfile(ITEMS / it["file"], ITEMS / orig)
+    try:
+        async with httpx.AsyncClient(timeout=P.timeout()) as client:
+            im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
+                client, [ITEMS / orig], tidy_prompts(it["category"], it.get("name", ""), it.get("gender"))))))
+    except P.GenError as e:
+        (ITEMS / orig).unlink(missing_ok=True)
+        log_error("tidy_item", e)
+        raise HTTPException(502, str(e))
+    except Exception as e:
+        (ITEMS / orig).unlink(missing_ok=True)
+        log_error("tidy_item", e)
+        raise HTTPException(502, friendly(e))
+    im.save(ITEMS / it["file"], quality=92)
+    with _lock:
+        db = db_load()
+        cur = db["items"].get(item_id)
+        if not cur:
+            return {"ok": False}
+        cur.update(orig=orig, hanger=cur["category"] in HANGED, cutv=None)
+        for k in ("fit", "desc", "person"):
+            cur.pop(k, None)
+        await asyncio.to_thread(ensure_cut, cur)
+        db_save(db)
+    return cur
+
+
+@app.post("/api/items/{item_id}/untidy")
+async def untidy_item(item_id: str):
+    with _lock:
+        db = db_load()
+        it = db["items"].get(item_id)
+        if not it or not it.get("orig") or not (ITEMS / it["orig"]).exists():
+            raise HTTPException(404, "没有可还原的原图。")
+        shutil.copyfile(ITEMS / it["orig"], ITEMS / it["file"])
+        (ITEMS / it["orig"]).unlink(missing_ok=True)
+        it.pop("orig"), it.update(hanger=False, cutv=None)
+        for k in ("fit", "desc", "person"):
+            it.pop(k, None)
+        await asyncio.to_thread(ensure_cut, it)
+        db_save(db)
+        return it
+
+
 class Rename(BaseModel):
     name: Optional[str] = None
     gender: Optional[str] = None
@@ -1184,7 +1302,7 @@ def rename_item(item_id: str, body: Rename):
         if body.name is not None:
             it["name"] = body.name.strip()[:40]
         if body.gender is not None:
-            if body.gender not in GENDERS or it["category"] not in GARMENTS:
+            if body.gender not in GENDERS or it["category"] not in GARMENTS | {"model"}:
                 raise HTTPException(400, "性别只能是男款、女款或通用。")
             it["gender"] = body.gender
             it.pop("desc", None)   # 文字描述里可能带着性别，改了性别让它重写
@@ -1297,11 +1415,31 @@ def create_customer(body: Customer):
     pid = uuid.uuid4().hex[:12]
     rec = {"created": time.time(), "stage": "线索", "kind": "个人定制", "log": []}
     apply_customer(rec, body)
+    if not rec.get("gender"):
+        rec["gender"] = P.env("GENDER", "man") if P.env("GENDER", "man") in ("man", "woman") else "man"
     with _lock:
         db = db_load()
         db.setdefault("profiles", {})[pid] = rec
+        attach_model(db, pid, rec["gender"])     # 新客户先配一个默认模特，不用等拍照就能试穿方案
         db_save(db)
     return {"id": pid, **rec}
+
+
+class UseModel(BaseModel):
+    model_id: Optional[str] = None   # 不填：按客户性别挑一个默认模特
+
+
+@app.post("/api/profiles/{pid}/model")
+def use_model(pid: str, body: UseModel):
+    """给这位客户加一张模特照片（服装库“模特”里的任意一个，默认按客户性别挑）。"""
+    with _lock:
+        db = db_load()
+        rec = db.setdefault("profiles", {}).setdefault(pid, {})
+        it = attach_model(db, pid, rec.get("gender") or "man", body.model_id)
+        if not it:
+            raise HTTPException(404, "服装库里还没有模特。到“服装库 → 模特”上传一个。")
+        db_save(db)
+        return it
 
 
 @app.patch("/api/profiles/{pid}")
@@ -1375,7 +1513,7 @@ def settings_view():
     return {"groups": ST.public(STORE.settings()),
             "paths": {"数据目录": str(DATA), "数据库文件": str(DBPATH), "单品和照片": str(ITEMS),
                       "试穿结果": str(RESULTS), "出错记录": str(DATA / "errors.log"),
-                      ".env（可选，面板里的值优先）": str(ROOT / ".env")},
+                      ".env（可选，面板里的值优先）": str(HOME / ".env")},
             "config": {"demo": MOCK, "pipeline_name": P.NAMES[PIPELINE], "editor_name": P.NAMES[EDITOR]}}
 
 
@@ -1433,6 +1571,8 @@ def delete_item(item_id: str):
     with _lock:
         db = db_load()
         it = db["items"].pop(item_id, None)
+        if it and it.get("builtin"):
+            db["models_removed"] = [*db.get("models_removed", []), item_id]
         if it:
             for f in (it["file"], it.get("cut"), it.get("orig")):
                 if f:
