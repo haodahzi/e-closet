@@ -22,7 +22,8 @@ except Exception:
 
 ROOT = Path(__file__).parent
 DATA, ITEMS, RESULTS = ROOT / "data", ROOT / "data" / "items", ROOT / "data" / "results"
-DBF = DATA / "db.json"
+DBF = DATA / "db.json"          # 老版本的存储，第一次启动时导入 SQLite
+DBPATH = DATA / "closet.db"
 for d in (ITEMS, RESULTS):
     d.mkdir(parents=True, exist_ok=True)
 
@@ -39,7 +40,14 @@ def load_env():
 
 
 load_env()
+import db as dbmod  # noqa: E402
 import providers as P  # noqa: E402  读完 .env 再导入
+import settings as ST  # noqa: E402
+
+STORE = dbmod.Store(DBPATH)
+if STORE.import_json(DBF):
+    print("  已把 data/db.json 导入 SQLite（data/closet.db），原文件改名为 db.json.migrated 留作备份。", flush=True)
+ST.apply(STORE.settings())   # 设置面板里保存的值优先于 .env
 
 PIPELINES = ("seedream", "bailian", "kling", "fal")
 
@@ -58,8 +66,17 @@ def default_editor():
     return next((x for x in ("seedream", "bailian", "fal") if P.ready(x)), "seedream")
 
 
-PIPELINE, EDITOR = default_pipeline(), default_editor()
-MOCK = os.environ.get("MOCK") == "1" or not P.ready(PIPELINE)
+PIPELINE, EDITOR, MOCK = "seedream", "seedream", True
+
+
+def reload_config():
+    """读完 .env 和设置面板之后（以及设置一改完）重新算：用哪条流程、哪家编辑、是不是演示模式。"""
+    global PIPELINE, EDITOR, MOCK
+    PIPELINE, EDITOR = default_pipeline(), default_editor()
+    MOCK = os.environ.get("MOCK") == "1" or not P.ready(PIPELINE)
+
+
+reload_config()
 
 CATEGORIES = {"person", "shirt", "pants", "belt", "shoes", "hat", "accessory"}
 MAX_ACCESSORIES = 3
@@ -97,15 +114,11 @@ _lock = threading.Lock()
 
 
 def db_load():
-    if DBF.exists():
-        return json.loads(DBF.read_text(encoding="utf-8"))
-    return {"items": {}, "looks": {}}
+    return STORE.load()
 
 
 def db_save(db):
-    tmp = DBF.with_suffix(".tmp")
-    tmp.write_text(json.dumps(db, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(DBF)
+    STORE.save(db)
 
 
 def normalize_image(raw: bytes) -> Image.Image:
@@ -552,9 +565,9 @@ def finish_prompts(shoes, wear, has_shirt):
     return [a, b]
 
 
-def portrait_prompts():
+def portrait_prompts(gender=None):
     """把一张随手拍的全身照整理成标准形象照：同一个人、正面站姿、贴身基础款、干净背景。"""
-    who = "woman" if P.env("GENDER", "woman") == "woman" else "man"
+    who = "woman" if (gender or P.env("GENDER", "man")) == "woman" else "man"
     base = ("a plain fitted white short-sleeve crew-neck T-shirt tucked into slim straight light-grey trousers, "
             "and plain white low sneakers")
     keep = (f"Exactly the same {who} as image 1: identical face and facial features, hairstyle and hair colour, "
@@ -720,7 +733,7 @@ async def execute(plan, client, on_step=lambda i, s: None, mock=None, item_dir=I
                 tmp.append(current)
                 continue
             if s["provider"] in P.EDIT and not P.ready(s["provider"]):
-                raise P.GenError(f"“{s['label']}”这一步要用{P.NAMES[s['provider']]}，但 .env 里还没填它的 key。")
+                raise P.GenError(f"“{s['label']}”这一步要用{P.NAMES[s['provider']]}，但 设置里还没填它的 key。")
             if s["kind"] == "edit":
                 current = await P.EDIT[s["provider"]](client, [current] + refs, s["prompts"])
             elif s["kind"] == "tryon2":
@@ -869,7 +882,11 @@ def look_palette(lk):
 JOBS = {}
 
 
-TRIES = max(1, int(P.env("AUTO_RETRY", "2")))  # 一身最多生成几次（自动检查不合格时重来）
+def tries():  # 一身最多生成几次（自动检查不合格时重来）；设置里改了马上生效
+    try:
+        return max(1, int(float(P.env("AUTO_RETRY", "2"))))
+    except ValueError:
+        return 2
 
 
 def check_refs(req: TryOn):
@@ -910,7 +927,7 @@ async def run_job(job, req: TryOn, plan):
                                      __import__("base64").b64encode(buf.getvalue()).decode(), wear)
 
         async with httpx.AsyncClient(timeout=P.timeout()) as client:
-            for attempt in range(TRIES if checking else 1):
+            for attempt in range(tries() if checking else 1):
                 im = await execute(plan, client, lambda i, s: job.update(
                     step_index=i, step=s["label"] if attempt == 0 else "效果不理想，重新生成"))
                 if not checking:
@@ -971,7 +988,9 @@ async def run_job(job, req: TryOn, plan):
 
 # ---------------------------------------------------------------- 接口
 app = FastAPI(title="衬衫衣橱")
-app.mount("/media", StaticFiles(directory=DATA), name="media")
+# 只开放图片目录：closet.db 里有 API Key 和客户资料，不能被浏览器直接下载
+app.mount("/media/items", StaticFiles(directory=ITEMS), name="media-items")
+app.mount("/media/results", StaticFiles(directory=RESULTS), name="media-results")
 
 
 @app.get("/")
@@ -1030,7 +1049,7 @@ def state():
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "profiles": db.get("profiles", {}),
-            "config": {"demo": MOCK, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
+            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
@@ -1056,7 +1075,7 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
         item["profile"] = profile.strip()[:40]
     if tidy == "1" and category in GARMENTS and not MOCK:
         if not P.ready(EDITOR):
-            raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，.env 里还没填它的 key。")
+            raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，设置里还没填它的 key。")
         im.save(ITEMS / f"{item_id}_orig.jpg", quality=92)
         item["orig"] = f"{item_id}_orig.jpg"
         item["hanger"] = category in ("shirt", "pants")
@@ -1129,17 +1148,191 @@ def set_profile(item_id: str, body: ProfileSet):
         return it
 
 
-class ProfileName(BaseModel):
-    name: str
+# ---------------------------------------------------------------- 客户档案
+# 一个客户 = 一个“形象”：照片、搭配本来就按形象分开，客户档案在它上面加联系方式、量体数据、跟进记录。
+STAGES = ["线索", "已量体", "方案中", "已报价", "已成交", "已流失"]
+KINDS = ["个人定制", "企业工服"]
+MEASURES = ["height", "weight", "neck", "shoulder", "chest", "waist", "hip", "sleeve", "shirt_len", "pants_len"]
+
+
+class Customer(BaseModel):
+    """客户档案。所有字段可选，没传的字段不动（只改名也能用）。"""
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    wechat: Optional[str] = None
+    company: Optional[str] = None
+    kind: Optional[str] = None            # 个人定制 / 企业工服
+    gender: Optional[str] = None          # man / woman
+    stage: Optional[str] = None
+    follow_date: Optional[str] = None     # 下次跟进，YYYY-MM-DD
+    budget: Optional[str] = None
+    qty: Optional[str] = None             # 企业工服：大概多少人
+    occasion: Optional[str] = None        # 场合 / 用途
+    prefs: Optional[str] = None           # 面料、颜色、版型偏好
+    notes: Optional[str] = None
+    measures: Optional[dict] = None       # 量体数据 cm / kg
+    measured_on: Optional[str] = None
+
+
+TEXT_LIMITS = {"name": 40, "phone": 30, "wechat": 40, "company": 60, "budget": 40, "qty": 20, "occasion": 120,
+               "prefs": 400, "notes": 2000, "follow_date": 10, "measured_on": 10}
+
+
+def apply_customer(rec, body: Customer):
+    """把传来的字段写进档案，顺便校验。"""
+    d = (body.model_dump if hasattr(body, "model_dump") else body.dict)(exclude_unset=True)
+    for k, lim in TEXT_LIMITS.items():
+        if k in d and d[k] is not None:
+            rec[k] = str(d[k]).strip()[:lim]
+    if "name" in d and not rec.get("name"):
+        raise HTTPException(400, "客户姓名不能为空。")
+    if d.get("stage") is not None:
+        if d["stage"] not in STAGES:
+            raise HTTPException(400, "不认识的客户阶段。")
+        rec["stage"] = d["stage"]
+    if d.get("kind") is not None:
+        if d["kind"] not in KINDS:
+            raise HTTPException(400, "不认识的客户类型。")
+        rec["kind"] = d["kind"]
+    if "gender" in d:
+        if d["gender"] not in (None, "", "man", "woman"):
+            raise HTTPException(400, "性别只能是 man 或 woman。")
+        rec["gender"] = d["gender"] or ""
+    if d.get("measures") is not None:
+        m = {}
+        for k in MEASURES:
+            v = str(d["measures"].get(k, "")).strip()
+            if v:
+                try:
+                    float(v)
+                except ValueError:
+                    raise HTTPException(400, f"量体数据“{k}”要填数字。")
+                m[k] = v
+        rec["measures"] = m
+    rec["updated"] = time.time()
+    return rec
+
+
+@app.post("/api/customers")
+def create_customer(body: Customer):
+    if not (body.name or "").strip():
+        raise HTTPException(400, "客户姓名不能为空。")
+    pid = uuid.uuid4().hex[:12]
+    rec = {"created": time.time(), "stage": "线索", "kind": "个人定制", "log": []}
+    apply_customer(rec, body)
+    with _lock:
+        db = db_load()
+        db.setdefault("profiles", {})[pid] = rec
+        db_save(db)
+    return {"id": pid, **rec}
 
 
 @app.patch("/api/profiles/{pid}")
-def rename_profile(pid: str, body: ProfileName):
+def update_customer(pid: str, body: Customer):
+    """改客户档案（也兼容老的只改名）。老形象第一次编辑时顺便补成完整档案。"""
     with _lock:
         db = db_load()
-        db.setdefault("profiles", {}).setdefault(pid, {})["name"] = body.name.strip()[:20]
+        rec = db.setdefault("profiles", {}).setdefault(pid, {})
+        rec.setdefault("created", time.time())
+        apply_customer(rec, body)
         db_save(db)
-        return db["profiles"][pid]
+        return {"id": pid, **rec}
+
+
+@app.get("/api/customers.csv")
+def export_customers():
+    """导出客户表格（Excel 能直接打开）。"""
+    import csv
+    from fastapi.responses import Response
+    db = db_load()
+    names = {"height": "身高", "weight": "体重", "neck": "领围", "shoulder": "肩宽", "chest": "胸围", "waist": "腰围",
+             "hip": "臀围", "sleeve": "袖长", "shirt_len": "衣长", "pants_len": "裤长"}
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["姓名", "电话", "微信", "公司", "类型", "性别", "阶段", "下次跟进", "预算", "人数", "场合", "偏好", "备注",
+                "量体日期", *names.values(), "最近一条记录"])
+    for pid, r in sorted(db.get("profiles", {}).items(), key=lambda x: -x[1].get("created", 0)):
+        m = r.get("measures") or {}
+        log = (r.get("log") or [{}])[0].get("text", "")
+        w.writerow([r.get("name", ""), r.get("phone", ""), r.get("wechat", ""), r.get("company", ""), r.get("kind", ""),
+                    {"man": "男", "woman": "女"}.get(r.get("gender"), ""), r.get("stage", ""), r.get("follow_date", ""),
+                    r.get("budget", ""), r.get("qty", ""), r.get("occasion", ""), r.get("prefs", ""), r.get("notes", ""),
+                    r.get("measured_on", ""), *[m.get(k, "") for k in names], log])
+    return Response("\ufeff" + out.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=customers.csv"})
+
+
+class LogEntry(BaseModel):
+    text: str
+
+
+@app.post("/api/profiles/{pid}/log")
+def add_log(pid: str, body: LogEntry):
+    """跟进记录：打了电话、量了体、发了方案……一条一条往下记。"""
+    text = body.text.strip()[:500]
+    if not text:
+        raise HTTPException(400, "记录内容不能为空。")
+    with _lock:
+        db = db_load()
+        rec = db.setdefault("profiles", {}).setdefault(pid, {})
+        rec.setdefault("log", []).insert(0, {"id": uuid.uuid4().hex[:8], "t": time.time(), "text": text})
+        rec["updated"] = time.time()
+        db_save(db)
+        return {"id": pid, **rec}
+
+
+@app.delete("/api/profiles/{pid}/log/{log_id}")
+def delete_log(pid: str, log_id: str):
+    with _lock:
+        db = db_load()
+        rec = db.get("profiles", {}).get(pid)
+        if not rec:
+            raise HTTPException(404, "这个客户不存在。")
+        rec["log"] = [e for e in rec.get("log", []) if e.get("id") != log_id]
+        db_save(db)
+        return {"id": pid, **rec}
+
+
+# ---------------------------------------------------------------- 设置
+def settings_view():
+    return {"groups": ST.public(STORE.settings()),
+            "paths": {"数据目录": str(DATA), "数据库文件": str(DBPATH), "单品和照片": str(ITEMS),
+                      "试穿结果": str(RESULTS), "出错记录": str(DATA / "errors.log"),
+                      ".env（可选，面板里的值优先）": str(ROOT / ".env")},
+            "config": {"demo": MOCK, "pipeline_name": P.NAMES[PIPELINE], "editor_name": P.NAMES[EDITOR]}}
+
+
+@app.get("/api/settings")
+def get_settings():
+    return settings_view()
+
+
+class SettingsPut(BaseModel):
+    set: dict = {}          # 要改的项：{键: 新值}；密钥项不传就是不改
+    clear: List[str] = []   # 要清掉的项：回到 .env / 默认值
+
+
+@app.put("/api/settings")
+def put_settings(body: SettingsPut):
+    put = {}
+    for k, v in body.set.items():
+        if k not in ST.FIELDS:
+            raise HTTPException(400, f"不认识的设置项：{k}")
+        try:
+            v = ST.clean(k, v)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if v:
+            put[k] = v
+        elif k not in ST.SECRET:      # 非密钥项：改成空 = 回到 .env / 默认值
+            body.clear.append(k)
+    bad = [k for k in body.clear if k not in ST.FIELDS]
+    if bad:
+        raise HTTPException(400, f"不认识的设置项：{bad[0]}")
+    STORE.set_settings(put, [k for k in body.clear if k not in put])
+    ST.apply(STORE.settings())
+    reload_config()
+    return {**settings_view(), "state": state()["config"]}
 
 
 class Order(BaseModel):
@@ -1373,6 +1566,8 @@ async def make_portrait(item_id: str):
     if not it or it["category"] != "person":
         raise HTTPException(404, "这张照片已经被删除。")
     src = ITEMS / it["file"]
+    _db = db_load()
+    gender = _db.get("profiles", {}).get(profile_of(it, _db["items"]), {}).get("gender")  # 客户档案里填的性别
     if MOCK:
         await asyncio.sleep(0.8)
         out = mock_step(src, [], 0, RESULTS)
@@ -1380,10 +1575,10 @@ async def make_portrait(item_id: str):
         out.unlink(missing_ok=True)
     else:
         if not P.ready(EDITOR):
-            raise HTTPException(400, f"生成形象照要用{P.NAMES[EDITOR]}的图像编辑，.env 里还没填它的 key。")
+            raise HTTPException(400, f"生成形象照要用{P.NAMES[EDITOR]}的图像编辑，设置里还没填它的 key。")
         try:
             async with httpx.AsyncClient(timeout=P.timeout()) as client:
-                im = await fetch_image(client, await P.EDIT[EDITOR](client, [src], portrait_prompts()))
+                im = await fetch_image(client, await P.EDIT[EDITOR](client, [src], portrait_prompts(gender)))
         except P.GenError as e:
             log_error("make_portrait", e)
             raise HTTPException(502, str(e))
@@ -1442,7 +1637,7 @@ def job_status(job_id: str):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
-    mode = "演示模式：还没填 key" if MOCK else f"换装：{P.NAMES[PIPELINE]}，编辑：{P.NAMES[EDITOR]}"
+    mode = "演示模式：还没填 key（在页面右上角“设置”里填）" if MOCK else f"换装：{P.NAMES[PIPELINE]}，编辑：{P.NAMES[EDITOR]}"
     print(f"\n  衬衫衣橱已启动: http://127.0.0.1:{port}   （{mode}）\n")
     if os.environ.get("NO_BROWSER") != "1":
         threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()

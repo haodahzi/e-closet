@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>D-Closet</title>
+<title>D-Closet · 定制销售</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -207,11 +207,9 @@ button{cursor:pointer}
 .btn:disabled{opacity:.6;cursor:wait}
 .drawer{position:fixed;top:0;right:0;bottom:0;z-index:30;width:min(420px,100%);background:var(--card);padding:24px;overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.08);animation:slide .35s var(--ease)}
 @keyframes slide{from{transform:translateX(100%)}}
-/* 形象切换：两个以上形象时才出现在顶部 */
-.who{display:flex;gap:2px;background:var(--tile-hi);border-radius:999px;padding:2px}
-.who button{border:0;background:none;border-radius:999px;padding:4px 14px;font-size:12.5px;color:var(--soft)}
-.who button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.who button:hover{color:var(--ink)}
+/* 顶部的客户按钮：显示当前客户，点开客户档案 */
+.who{border:0;background:var(--tile-hi);border-radius:999px;padding:5px 16px;font-size:12.5px;color:var(--ink);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who:hover{background:var(--ink);color:#fff}
 .pgroup{margin-top:22px}
 .pgroup h4{display:flex;align-items:baseline;gap:10px;margin:0;font:400 17px/1.3 var(--serif);font-style:italic}
 .pgroup h4 .link{font:400 12px var(--sans);font-style:normal}
@@ -259,15 +257,83 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 @keyframes cursnap{from{transform:scale(1.25)}to{transform:scale(1)}}
 .curring{position:fixed;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:1.5px solid var(--accent);pointer-events:none;z-index:999;animation:curring .7s ease-out forwards}
 @keyframes curring{from{transform:scale(.6);opacity:.9}to{transform:scale(2.4);opacity:0}}
+
+/* ---------- 客户档案 ---------- */
+.drawer.wide{width:min(600px,100%)}
+.drawer.still{animation:none}
+.custlist{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.cust{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:10px 12px}
+.cust:hover{border-color:var(--ink)}
+.cust.on{box-shadow:0 0 0 1.5px var(--ink)}
+.cust img,.cust .noph{width:44px;height:56px;border-radius:var(--r-sm);object-fit:cover;object-position:top;background:var(--tile);flex:none}
+.cust .noph{display:flex;align-items:center;justify-content:center;font:italic 400 20px var(--serif);color:var(--soft)}
+.cust .ci{display:flex;flex-direction:column;min-width:0;flex:1}
+.cust .ci b{display:flex;align-items:center;gap:8px;font-weight:600}
+.cust em,.logrow em{font-style:normal}
+.due{color:var(--danger);font-style:normal}
+.stg{font:500 11px/1 var(--sans);padding:3px 8px;border-radius:999px;background:var(--tile);color:var(--soft)}
+.stg.s1,.stg.s2{background:#EFE3D6;color:#7A4E33}
+.stg.s3{background:#E3E7EE;color:#3C4C6B}
+.stg.s4{background:#DDEBDD;color:#2F6B3A}
+.stg.s5{background:#EDE1DF;color:#8C4A41}
+.dhead{display:flex;align-items:center;gap:10px;margin:8px 0 4px}
+.dname{font:400 24px/1.2 var(--serif);font-style:italic}
+.sect{margin-top:20px}
+.sect h4{margin:0 0 8px;font:600 12px/1.4 var(--sans);letter-spacing:.08em;color:var(--soft);display:flex;align-items:baseline;gap:6px}
+.sect h4 .muted{font-weight:400;letter-spacing:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}
+.mgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px 14px}
+.f{display:flex;flex-direction:column;gap:2px;min-width:0}
+.f>span{font-size:11.5px;color:var(--soft)}
+.f.span2{grid-column:1/-1}
+.f select.field{padding:8px 0}
+.field.area{min-height:64px;resize:vertical;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font:inherit;font-size:13px}
+.field.inl{width:auto;display:inline-block;padding:0 4px;font-size:12px}
+.seg2{display:flex;background:var(--tile);border-radius:var(--r-sm);padding:2px;gap:2px;width:max-content;max-width:100%}
+.seg2 button{border:0;background:none;border-radius:8px;padding:5px 11px;font-size:12px;color:var(--soft);white-space:nowrap}
+.seg2 button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumbs img{width:60px;height:80px;object-fit:cover;object-position:top;border-radius:var(--r-sm);background:var(--tile);cursor:pointer}
+.thumbs .addt{width:60px;height:80px;border:1.5px dashed var(--faint);border-radius:var(--r-sm);background:none;color:var(--soft);font-size:12px}
+.logrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.logrow .lt{flex:1;white-space:pre-wrap;word-break:break-word}
+.x2{border:0;background:none;color:var(--faint);font-size:16px;line-height:1}
+.x2:hover{color:var(--danger)}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}.mgrid{grid-template-columns:repeat(2,1fr)}}
+/* ---------- 设置 ---------- */
+.sheet.setp{width:min(860px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column}
+.sheet.setp h3{display:flex;justify-content:space-between;align-items:baseline}
+.setbody{display:flex;gap:24px;min-height:0;flex:1;overflow:hidden}
+.setbody nav{display:flex;flex-direction:column;gap:2px;flex:0 0 150px}
+.setbody nav button{text-align:left;border:0;background:none;border-radius:var(--r-sm);padding:8px 12px;font-size:13px;color:var(--soft)}
+.setbody nav button[aria-current="true"]{background:var(--tile);color:var(--ink);font-weight:600}
+.setfields{flex:1;min-width:0;overflow-y:auto;padding-right:6px;display:flex;flex-direction:column;gap:14px}
+.sf{display:flex;flex-direction:column;gap:2px}
+.sf label{display:flex;flex-direction:column;gap:0}
+.sf .sl{font-size:12.5px;font-weight:500;display:flex;gap:8px;align-items:baseline}
+.sf select.field{padding:8px 0}
+.src{font:400 11px var(--sans);font-style:normal;color:var(--faint)}
+.src.db{color:#2F6B3A}
+.sf.tgl label{flex-direction:row;align-items:center;justify-content:space-between}
+.tg{accent-color:var(--ink);width:18px;height:18px}
+.sf .link{align-self:flex-start;font-size:12px;padding:0}
+.paths{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.paths h4{margin:0 0 6px;font:600 12px var(--sans);letter-spacing:.08em;color:var(--soft)}
+.pathrow{display:flex;flex-direction:column;margin-bottom:6px}
+.pathrow code{font:12px/1.4 ui-monospace,Menlo,monospace;word-break:break-all;background:var(--tile);border-radius:6px;padding:3px 6px}
+#slayer .veil{z-index:40}
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);z-index:60;background:var(--ink);color:#fff;border-radius:999px;padding:9px 20px;font-size:13px}
+@media (max-width:640px){.setbody{flex-direction:column;overflow-y:auto}.setbody nav{flex-direction:row;flex-wrap:wrap;flex:none}.setfields{overflow:visible}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="brand">D<i>-</i>Closet</div>
-  <div class="who" id="who" role="tablist" aria-label="切换形象" hidden></div>
+  <button class="who" id="who" title="客户档案：切换客户、查看和修改资料">客户档案</button>
   <span class="demo" id="demo" hidden>演示模式 · 还没填 key</span>
-  <button class="link" id="open-photos">我的照片</button>
+  <button class="link" id="open-photos">客户照片</button>
+  <button class="link" id="open-settings">⚙ 设置</button>
 </header>
 
 <div class="room">
@@ -312,6 +378,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 
 <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
 <div id="layer"></div>
+<div id="slayer"></div>
 <div class="cur" id="cur" aria-hidden="true"><svg class="b" viewBox="0 0 22 22">
   <defs><radialGradient id="pearl" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#F1ECE4"/><stop offset="1" stop-color="#D9D1C4"/></radialGradient></defs>
   <circle cx="11" cy="11" r="10" fill="url(#pearl)" stroke="#B9B0A2" stroke-width=".8"/>
@@ -321,7 +388,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 </svg></div>
 
 <script>
-const LABEL={person:'我的照片',shirt:'衬衫',pants:'裤子',belt:'腰带',shoes:'鞋子',hat:'帽子',accessory:'配饰'};
+const LABEL={person:'客户照片',shirt:'衬衫',pants:'裤子',belt:'腰带',shoes:'鞋子',hat:'帽子',accessory:'配饰'};
 /* 木衣架：金属挂钩 + 木头肩；裤架：直杆 + 两个夹子 */
 const HANGER=`<svg class="hook" viewBox="0 0 100 40"><path d="M50 19c0-4 5-4.5 5-9.5a5 5 0 0 0-10 0" fill="none" stroke="#9d9d9d" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M50 17 6 33c-3 1-3 5 1 5h86c4 0 4-4 1-5z" fill="url(#w)"/><defs><linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A8714C"/><stop offset="1" stop-color="#7A4E33"/></linearGradient></defs></svg>`;
@@ -798,7 +865,7 @@ function renderFit(){
   const any=!!(sel.shirt||sel.pants||sel.belt||sel.shoes||sel.hat||sel.accessories.length), go=$('go');
   go.disabled=!!job||!sel.person||!any;
   go.textContent=job?'正在生成…':est&&est.cached?'调出这一身':'生成试穿';
-  $('cost').textContent=!sel.person?'先在“我的照片”放一张全身照':!any?'':!est?'':
+  $('cost').textContent=!sel.person?'先在“客户档案”里给客户放一张全身照':!any?'':!est?'':
     est.cached?'生成过，直接调出':S.config.demo?'演示模式':`约 ¥${est.cost.toFixed(2)}`;
 }
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{if(job)return;sel[b.parentElement.dataset.k]=b.dataset.v;viewing=null;keep();render()}));
@@ -909,7 +976,7 @@ function uploadSheet(files,cat){
 
 /* ---------- 我的照片 ---------- */
 let drawerOpen=false;
-function openDrawer(){drawerOpen=true;renderDrawer()}
+function openDrawer(view='photos'){drawerOpen=true;drawerView=view;renderDrawer()}
 /* ---------- 形象：同一个人的照片（原照 + 形象照）算一个形象；衣橱共用，Looks 按形象分开 ---------- */
 function profileOf(it){
   const seen=new Set();
@@ -924,7 +991,8 @@ function profiles(){   /* 有照片的形象按最早那张照片排；照片删
   const out=[], seen={};
   [...of('person')].sort((a,b)=>a.created-b.created).forEach(i=>{const pid=profileOf(i);if(!seen[pid])out.push(seen[pid]={id:pid,photos:[]});seen[pid].photos.push(i)});
   S.looks.forEach(l=>{const pid=lookPid(l);if(pid&&!seen[pid])out.push(seen[pid]={id:pid,photos:[]})});
-  out.forEach((p,n)=>p.name=(S.profiles||{})[p.id]?.name||`形象 ${n+1}`);
+  Object.keys(S.profiles||{}).forEach(pid=>{if(!seen[pid])out.push(seen[pid]={id:pid,photos:[]})});   /* 只建了档案、还没放照片的客户 */
+  out.forEach((p,n)=>{p.rec=(S.profiles||{})[p.id]||{};p.name=p.rec.name||`客户 ${n+1}`});
   return out;
 }
 let curPid=null;try{curPid=localStorage.getItem('pid')}catch(e){}
@@ -948,10 +1016,8 @@ function switchTo(pid){
   if(lk)showLook(lk);else{viewing=null;peek=false;keep();render()}
 }
 function renderWho(){
-  const all=profiles(), w=$('who');
-  w.hidden=all.length<2;if(w.hidden)return;
-  const cur=activePid();
-  w.replaceChildren(...all.map(p=>h('button',{role:'tab','aria-selected':String(p.id===cur),onclick:()=>switchTo(p.id)},p.name)));
+  const p=profiles().find(x=>x.id===activePid());
+  $('who').textContent=p?'客户：'+p.name:'客户档案';
 }
 function renameProfile(p){
   const name=h('input',{class:'field',value:p.name,maxlength:20,placeholder:'比如“我”“妈妈”“通勤的我”'});
@@ -960,7 +1026,7 @@ function renameProfile(p){
     close();await refresh()}catch(e){say(e.message)}};
   name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
   $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
-    h('div',{class:'sheet',role:'dialog','aria-label':'给形象起名'},h('h3',{},'给这个形象起个名字'),name,
+    h('div',{class:'sheet',role:'dialog','aria-label':'给客户起名'},h('h3',{},'给这位客户起个名字'),name,
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'保存')))));
   name.focus();name.select();
 }
@@ -978,6 +1044,8 @@ let upProfile='';
 function renderDrawer(){
   if($('layer').querySelector('.sheet'))return;
   if(!drawerOpen){if($('layer').querySelector('.drawer'))$('layer').replaceChildren();return}
+  if(drawerView==='customers')return renderCustomers();
+  if(drawerView==='detail')return renderCustomerDetail();
   const close=()=>{drawerOpen=false;renderDrawer()};
   const all=profiles(), cur=activePid();
   const card=i=>h('div',{class:'photo'+(sel.person===i.id?' on':'')},
@@ -988,23 +1056,196 @@ function renderDrawer(){
       async onclick(){portraiting=i.id;renderDrawer();say('');
         try{const it=await api(`/api/items/${i.id}/portrait`,{method:'POST'});sel.person=it.id;viewing=null;keep()}catch(e){say(e.message)}
         finally{portraiting=null;await refresh()}}},portraiting===i.id?'生成中…':'生成形象照'),
-    h('select',{'aria-label':'归到哪个形象',onchange:e=>moveTo(i,e.target.value==='_new'?null:e.target.value)},
-      ...all.map(p=>{const o=h('option',{value:p.id},'归到 '+p.name);o.selected=p.id===profileOf(i);return o}),h('option',{value:'_new'},'单独成一个新形象')));
+    h('select',{'aria-label':'归到哪位客户',onchange:e=>moveTo(i,e.target.value==='_new'?null:e.target.value)},
+      ...all.map(p=>{const o=h('option',{value:p.id},'归到 '+p.name);o.selected=p.id===profileOf(i);return o}),h('option',{value:'_new'},'单独算一位新客户')));
   const groups=all.map(p=>h('div',{class:'pgroup'},
     h('h4',{class:p.id===cur?'on':''},p.name,h('button',{class:'link',onclick:()=>renameProfile(p)},'改名'),
-      all.length>1||!p.photos.length?h('button',{class:'link',onclick:()=>deleteProfile(p)},'删除这个形象'):null),
+      all.length>1||!p.photos.length?h('button',{class:'link',onclick:()=>deleteProfile(p)},'删除这位客户'):null),
     p.photos.length?null:h('p',{class:'muted'},`照片已经删掉了，还留着 ${S.looks.filter(l=>lookPid(l)===p.id).length} 套搭配。`),
     h('div',{class:'photos'},...p.photos.slice().reverse().map(card),
       h('button',{class:'addp',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 添加照片'))));
   $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
-    h('div',{class:'drawer',role:'dialog','aria-label':'我的照片'},
-      h('h3',{},'我的照片',h('button',{class:'link',onclick:close},'关闭')),
+    h('div',{class:'drawer',role:'dialog','aria-label':'客户照片'},
+      h('h3',{},'客户照片',h('button',{class:'link',onclick:close},'关闭')),
       h('p',{class:'muted'},'正面站立、头到脚全身入镜、光线均匀。穿贴身短袖和修身长裤，长发拨到肩后，手臂别挡住腰。随手拍的照片可以点“生成形象照”整理成标准底片。'),
       ...groups,
-      h('div',{class:'pgroup'},h('div',{class:'photos'},h('button',{class:'addp',onclick:()=>{upProfile='';pickFiles('person')}},all.some(p=>p.photos.length)?'+ 新的形象':'+ 添加照片'))))));
+      h('div',{class:'pgroup'},h('div',{class:'photos'},h('button',{class:'addp',onclick:()=>{upProfile='';pickFiles('person')}},all.some(p=>p.photos.length)?'+ 新的客户':'+ 添加照片'))))));
 }
-$('open-photos').addEventListener('click',openDrawer);
-addEventListener('keydown',e=>{if(e.key==='Escape'){drawerOpen=false;$('layer').replaceChildren()}});
+$('open-photos').addEventListener('click',()=>openDrawer('photos'));
+addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('slayer').firstChild)return closeSettings();drawerOpen=false;draft=null;dirty=false;$('layer').replaceChildren()});
+
+/* ---------- 客户档案 ---------- */
+const STAGE_CLS={'线索':'s0','已量体':'s1','方案中':'s2','已报价':'s3','已成交':'s4','已流失':'s5'};
+const MEASURE_FIELDS=[['height','身高','cm'],['weight','体重','kg'],['neck','领围','cm'],['shoulder','肩宽','cm'],['chest','胸围','cm'],
+  ['waist','腰围','cm'],['hip','臀围','cm'],['sleeve','袖长','cm'],['shirt_len','衣长','cm'],['pants_len','裤长','cm']];
+let drawerView='photos', detailPid=null, custFilter='', custStage='', draft=null, dirty=false;
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const fmtT=t=>new Date(t*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const custLooks=p=>S.looks.filter(l=>lookPid(l)===p.id);
+function stageBadge(r){const s=r.stage||'线索';return h('span',{class:'stg '+(STAGE_CLS[s]||'s0')},s)}
+function fld(label,input,cls=''){return h(input.tagName==='DIV'?'div':'label',{class:'f '+cls},h('span',{},label),input)}
+function seg2(opts,val,on){
+  const box=h('div',{class:'seg2'});
+  const paint=v=>box.replaceChildren(...opts.map(([k,t])=>h('button',{type:'button','aria-pressed':String(k===v),onclick:()=>{on(k);paint(k)}},t)));
+  paint(val);return box;
+}
+function exportCustomers(){location.href='/api/customers.csv'}
+
+function renderCustomers(){
+  const close=()=>{drawerOpen=false;renderDrawer()};
+  const all=profiles(), cur=activePid(), q=custFilter.trim().toLowerCase();
+  const stages=S.config.stages||[];
+  const match=p=>{const r=p.rec;return (!custStage||(r.stage||'线索')===custStage)&&(!q||[p.name,r.phone,r.wechat,r.company,r.occasion].some(x=>(x||'').toLowerCase().includes(q)))};
+  const list=all.filter(match).sort((a,b)=>{   /* 该跟进的排前面，其次最近改过的 */
+    const da=a.rec.follow_date||'9999', db=b.rec.follow_date||'9999';
+    return da!==db?(da<db?-1:1):(b.rec.updated||b.rec.created||0)-(a.rec.updated||a.rec.created||0)});
+  const card=p=>{const r=p.rec, due=r.follow_date&&r.follow_date<=today()&&!['已成交','已流失'].includes(r.stage||'');
+    const ph=p.photos[p.photos.length-1], n=custLooks(p).length;
+    return h('button',{class:'cust'+(p.id===cur?' on':''),onclick:()=>{detailPid=p.id;draft=null;dirty=false;drawerView='detail';renderDrawer()}},
+      ph?h('img',{src:src(ph),alt:''}):h('span',{class:'noph'},p.name.slice(0,1)),
+      h('span',{class:'ci'},
+        h('b',{},p.name,stageBadge(r)),
+        h('span',{class:'muted'},[r.company,r.phone].filter(Boolean).join(' · ')||'还没有联系方式'),
+        h('span',{class:'muted'},`${r.kind||'个人定制'} · ${n} 套搭配`+(r.follow_date?` · `:''),r.follow_date?h('em',{class:due?'due':''},`${due?'该跟进了 ':'跟进 '}${r.follow_date.slice(5)}`):null)))};
+  const search=h('input',{class:'field',placeholder:'搜索姓名、电话、公司…',value:custFilter,oninput:e=>{custFilter=e.target.value;
+    const pos=e.target.selectionStart;renderCustomers();const i=$('layer').querySelector('input.field');if(i){i.focus();i.setSelectionRange(pos,pos)}}});
+  const chips=h('div',{class:'cats'},
+    h('button',{'aria-pressed':String(!custStage),onclick:()=>{custStage='';renderCustomers()}},`全部 ${all.length}`),
+    ...stages.map(s=>h('button',{'aria-pressed':String(custStage===s),onclick:()=>{custStage=s;renderCustomers()}},`${s} ${all.filter(p=>(p.rec.stage||'线索')===s).length}`)));
+  $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'drawer wide',role:'dialog','aria-label':'客户档案'},
+      h('h3',{},'客户档案',h('span',{},h('button',{class:'link',onclick:exportCustomers},'导出表格'),' ',h('button',{class:'link',onclick:close},'关闭'))),
+      h('div',{class:'row',style:'margin:10px 0 14px;justify-content:space-between;gap:14px'},search,h('button',{class:'btn dark',style:'white-space:nowrap',onclick:newCustomer},'+ 新客户')),
+      chips,
+      list.length?h('div',{class:'custlist'},...list.map(card))
+        :h('p',{class:'muted',style:'margin-top:24px'},all.length?'没有符合条件的客户。':'还没有客户。点右上角“+ 新客户”建第一份档案，再给 TA 放一张全身照，就能在衣橱里为 TA 试穿方案了。'))));
+}
+function newCustomer(){
+  const name=h('input',{class:'field',maxlength:40,placeholder:'客户姓名或称呼，比如“张总”'});
+  let kind='个人定制';
+  const company=h('input',{class:'field',maxlength:60,placeholder:'公司 / 单位（可选）'});
+  const close=()=>{$('layer').replaceChildren();renderDrawer()};
+  const save=async()=>{
+    if(!name.value.trim()){name.focus();return}
+    try{const c=await api('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.value,company:company.value,kind})});
+      await refresh();detailPid=c.id;draft=null;dirty=false;drawerView='detail';switchTo(c.id);close()}catch(e){say(e.message)}};
+  name.addEventListener('keydown',e=>{if(e.key==='Enter')save()});
+  $('layer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)close()}},
+    h('div',{class:'sheet',role:'dialog','aria-label':'新客户'},h('h3',{},'新建客户档案'),name,
+      h('div',{style:'margin:14px 0 4px'},seg2([['个人定制','个人定制'],['企业工服','企业工服']],kind,v=>kind=v)),company,
+      h('div',{class:'row'},h('button',{class:'btn',onclick:close},'取消'),h('button',{class:'btn dark',onclick:save},'建档')))));
+  name.focus();
+}
+const REC_KEYS=['name','phone','wechat','company','kind','gender','stage','follow_date','budget','qty','occasion','prefs','notes','measured_on'];
+let qtyF;
+function renderCustomerDetail(){
+  const p=profiles().find(x=>x.id===detailPid);
+  if(!p){drawerView='customers';return renderCustomers()}
+  const have=$('layer').querySelector('.drawer.detail');
+  if(have&&have.dataset.pid===p.id&&dirty&&have.contains(document.activeElement))return;   /* 正在填的表单，别被后台刷新冲掉 */
+  const r=p.rec;
+  if(!draft||draft.pid!==p.id){draft={pid:p.id,measures:{...(r.measures||{})}};REC_KEYS.forEach(k=>draft[k]=r[k]||'');if(!draft.kind)draft.kind='个人定制';if(!draft.stage)draft.stage='线索'}
+  const mark=()=>{dirty=true;saveBtn.disabled=false;saveBtn.textContent='保存档案'};
+  const inp=(k,extra={})=>h('input',{class:'field',value:draft[k]||'',oninput:e=>{draft[k]=e.target.value;mark()},...extra});
+  const area=(k,ph)=>{const t=h('textarea',{class:'field area',placeholder:ph,oninput:e=>{draft[k]=e.target.value;mark()}});t.value=draft[k]||'';return t};
+  const back=()=>{drawerView='customers';draft=null;dirty=false;renderDrawer()};
+  const close=()=>{drawerOpen=false;draft=null;dirty=false;renderDrawer()};
+  const saveBtn=h('button',{class:'btn dark',disabled:true,async onclick(){
+    saveBtn.disabled=true;saveBtn.textContent='保存中…';
+    const body={};REC_KEYS.forEach(k=>body[k]=draft[k]);body.measures=draft.measures;
+    try{await api('/api/profiles/'+encodeURIComponent(p.id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      dirty=false;await refresh();$('layer').querySelector('.drawer.detail .savebtn')&&($('layer').querySelector('.drawer.detail .savebtn').textContent='已保存 ✓')}
+    catch(e){saveBtn.disabled=false;saveBtn.textContent='保存档案';say(e.message);alert(e.message)}}},'已保存 ✓');
+  saveBtn.classList.add('savebtn');
+  const msr=h('div',{class:'mgrid'},...MEASURE_FIELDS.map(([k,t,u])=>fld(`${t} ${u}`,h('input',{class:'field',inputmode:'decimal',value:draft.measures[k]||'',
+    oninput:e=>{draft.measures[k]=e.target.value.trim();mark()}}),'m')));
+  const logIn=h('input',{class:'field',placeholder:'记一笔：电话沟通、约了量体、发了方案…',maxlength:500});
+  const addLog=async()=>{if(!logIn.value.trim())return;
+    try{await api(`/api/profiles/${encodeURIComponent(p.id)}/log`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:logIn.value})});
+      const keep=dirty;await refresh();dirty=keep}catch(e){alert(e.message)}};
+  logIn.addEventListener('keydown',e=>{if(e.key==='Enter')addLog()});
+  const photos=h('div',{class:'thumbs'},...p.photos.slice().reverse().map(i=>h('img',{src:src(i),alt:'',onclick:()=>{sel.person=i.id;viewing=null;curPid=p.id;keep();render()}})),
+    h('button',{class:'addt',onclick:()=>{upProfile=p.id;pickFiles('person')}},'+ 照片'));
+  const looks=custLooks(p);
+  const prevTop=have?have.scrollTop:0;
+  const el=h('div',{class:'drawer wide detail'+(have?' still':''),'data-pid':p.id,role:'dialog','aria-label':'客户详情'},
+    h('h3',{},h('span',{},h('button',{class:'link',onclick:back},'‹ 客户列表')),h('button',{class:'link',onclick:close},'关闭')),
+    h('div',{class:'dhead'},h('b',{class:'dname'},p.name),stageBadge({stage:draft.stage}),
+      h('button',{class:'btn',style:'margin-left:auto',onclick:()=>{if(dirty&&!confirm('档案改动还没保存，先切换会丢掉。继续？'))return;switchTo(p.id);close()}},'用 TA 试穿方案 →')),
+    h('div',{class:'sect'},h('h4',{},'基本信息'),
+      h('div',{class:'grid2'},fld('姓名',inp('name',{maxlength:40})),fld('电话',inp('phone',{maxlength:30,inputmode:'tel'})),fld('微信',inp('wechat',{maxlength:40})),
+        fld('公司 / 单位',inp('company',{maxlength:60})),
+        fld('客户类型',seg2([['个人定制','个人定制'],['企业工服','企业工服']],draft.kind,v=>{draft.kind=v;mark();qtyF.hidden=v!=='企业工服'})),
+        fld('性别（影响形象照）',seg2([['','未填'],['man','男'],['woman','女']],draft.gender,v=>{draft.gender=v;mark()})),
+        fld('跟进阶段',(()=>{const s=h('select',{class:'field',onchange:e=>{draft.stage=e.target.value;mark()}},...(S.config.stages||[]).map(x=>h('option',{value:x},x)));s.value=draft.stage;return s})()),
+        fld('下次跟进',inp('follow_date',{type:'date'})),
+        fld('预算',inp('budget',{maxlength:40,placeholder:'比如 3000–5000 元/套'})),
+        (qtyF=fld('大概多少人（工服）',inp('qty',{maxlength:20,placeholder:'比如 120'}))),
+        fld('场合 / 用途',inp('occasion',{maxlength:120,placeholder:'商务会议、婚礼、公司统一工服…'}),'span2'))),
+    h('div',{class:'sect'},h('h4',{},'偏好'),area('prefs','面料、颜色、版型、领型、品牌…客户说过喜欢或不喜欢什么')),
+    h('div',{class:'sect'},h('h4',{},'量体数据',h('span',{class:'muted'},'  量体日期 '),
+        h('input',{type:'date',class:'field inl',value:draft.measured_on,oninput:e=>{draft.measured_on=e.target.value;mark()}})),msr),
+    h('div',{class:'sect'},h('h4',{},'备注'),area('notes','体型特点（溜肩、驼背、凸肚…）、特殊要求、付款方式…')),
+    h('div',{class:'sect'},h('h4',{},`照片与搭配`,h('span',{class:'muted'},`  ${p.photos.length} 张照片 · ${looks.length} 套搭配`)),photos),
+    h('div',{class:'sect'},h('h4',{},'跟进记录'),h('div',{class:'row',style:'margin:0 0 8px;gap:10px'},logIn,h('button',{class:'btn',onclick:addLog},'记下')),
+      ...(r.log||[]).map(e=>h('div',{class:'logrow'},h('span',{class:'muted'},fmtT(e.t)),h('span',{class:'lt'},e.text),
+        h('button',{class:'x2','aria-label':'删除这条记录',onclick:async()=>{try{await api(`/api/profiles/${encodeURIComponent(p.id)}/log/${e.id}`,{method:'DELETE'});const k=dirty;await refresh();dirty=k}catch(er){alert(er.message)}}},'×')))),
+    h('div',{class:'sect',style:'display:flex;justify-content:space-between;align-items:center;position:sticky;bottom:-24px;background:var(--card);padding:12px 0;border-top:1px solid var(--line)'},
+      h('button',{class:'link',style:'color:var(--danger)',onclick:async()=>{await deleteProfile(p);if(!profiles().some(x=>x.id===p.id))back()}},'删除这位客户'),saveBtn));
+  qtyF.hidden=draft.kind!=='企业工服';
+  $('layer').replaceChildren(h('div',{class:'veil',style:'justify-content:flex-end;padding:0',onclick:e=>{if(e.target===e.currentTarget)close()}},el));
+  el.scrollTop=prevTop;
+}
+
+/* ---------- 设置 ---------- */
+let setData=null, setTab=0, setEdits={}, setClear=new Set();
+const SRC_TXT={db:'已在这里设置',env:'来自 .env',default:'默认值',none:'未设置'};
+async function openSettings(){
+  try{setData=await api('/api/settings');setTab=0;setEdits={};setClear=new Set();renderSettings()}catch(e){say(e.message)}
+}
+function closeSettings(){
+  if(Object.keys(setEdits).length+setClear.size&&!confirm('有改动还没保存，确定关闭？'))return;
+  $('slayer').replaceChildren();
+}
+function renderSettings(){
+  const g=setData.groups[setTab];
+  const changed=Object.keys(setEdits).length+setClear.size>0;
+  const field=f=>{
+    const edited=f.key in setEdits, cleared=setClear.has(f.key);
+    let input;
+    if(f.type==='select'){input=h('select',{class:'field',onchange:e=>{setEdits[f.key]=e.target.value;setClear.delete(f.key);renderSettingsKeep()}},
+        ...f.options.map(([v,t])=>h('option',{value:v},t)));input.value=edited?setEdits[f.key]:f.value}
+    else if(f.type==='toggle'){input=h('input',{type:'checkbox',class:'tg',onchange:e=>{setEdits[f.key]=e.target.checked?'1':'0';setClear.delete(f.key);renderSettingsKeep()}});input.checked=(edited?setEdits[f.key]:f.value)==='1'}
+    else if(f.type==='secret'){input=h('input',{class:'field',type:'password',autocomplete:'off',placeholder:cleared?'将清除':f.set?`已设置 ${f.hint}（不改就留空）`:'粘贴 key',
+        value:edited?setEdits[f.key]:'',oninput:e=>{if(e.target.value)setEdits[f.key]=e.target.value;else delete setEdits[f.key];setClear.delete(f.key);renderSettingsKeep()}})}
+    else{input=h('input',{class:'field',type:f.type==='number'?'number':'text',step:'any',autocomplete:'off',placeholder:f.default||'',
+        value:edited?setEdits[f.key]:(f.source==='default'?'':f.value),oninput:e=>{setEdits[f.key]=e.target.value;setClear.delete(f.key);renderSettingsKeep()}})}
+    const reset=(f.source==='db'&&!cleared)?h('button',{class:'link',type:'button',onclick:()=>{setClear.add(f.key);delete setEdits[f.key];renderSettings()}},f.type==='secret'?'清除':'恢复默认'):null;
+    return h('div',{class:'sf'+(f.type==='toggle'?' tgl':'')},h('label',{},h('span',{class:'sl'},f.label,h('em',{class:'src '+f.source},cleared?'保存后清除':SRC_TXT[f.source]||'')),input),
+      f.help?h('span',{class:'muted'},f.help):null,reset);
+  };
+  const save=h('button',{class:'btn dark',disabled:!changed,async onclick(){
+    save.disabled=true;save.textContent='保存中…';
+    try{setData=await api('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({set:setEdits,clear:[...setClear]})});
+      setEdits={};setClear=new Set();await refresh();renderSettings();toast('设置已保存，马上生效')}
+    catch(e){save.disabled=false;save.textContent='保存';alert(e.message)}}},'保存');
+  const paths=g.id==='local'?h('div',{class:'paths'},h('h4',{},'文件位置'),...Object.entries(setData.paths).map(([k,v])=>h('div',{class:'pathrow'},h('span',{class:'muted'},k),h('code',{},v))),
+    h('p',{class:'muted'},'备份或搬家：关掉程序，把 data 文件夹整个拷走。API Key 保存在 closet.db 里，不要把它发给别人。')):null;
+  $('slayer').replaceChildren(h('div',{class:'veil',onclick:e=>{if(e.target===e.currentTarget)closeSettings()}},
+    h('div',{class:'sheet setp',role:'dialog','aria-label':'设置'},
+      h('h3',{},'设置',h('button',{class:'link',onclick:closeSettings},'关闭')),
+      h('div',{class:'setbody'},
+        h('nav',{},...setData.groups.map((x,n)=>h('button',{'aria-current':String(n===setTab),onclick:()=>{setTab=n;renderSettings()}},x.title))),
+        h('div',{class:'setfields'},h('p',{class:'muted',style:'margin:0 0 4px'},setData.config.demo?'现在是演示模式（没填 key，不花钱）。':`换装：${setData.config.pipeline_name}，编辑：${setData.config.editor_name}`),
+          ...g.fields.map(field),paths)),
+      h('div',{class:'row'},h('button',{class:'btn',onclick:closeSettings},'取消'),save))));
+}
+function renderSettingsKeep(){   /* 输入时只更新保存按钮，不重画（否则输入框会失焦） */
+  const b=$('slayer').querySelector('.row .btn.dark');if(b)b.disabled=!(Object.keys(setEdits).length+setClear.size);
+}
+function toast(t){const e=h('div',{class:'toast'},t);document.body.append(e);setTimeout(()=>e.remove(),2200)}
+$('open-settings').addEventListener('click',openSettings);
+$('who').addEventListener('click',()=>openDrawer('customers'));
 
 refresh().catch(e=>say(e.message));
 

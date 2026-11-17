@@ -18,6 +18,13 @@ if env.exists():
             os.environ.setdefault(k.strip(), v.split(" #")[0].strip().strip('"').strip("'"))
 
 import providers as P  # noqa: E402
+try:  # 设置面板里保存的值优先于 .env
+    import db as _db, settings as _st
+    _p = ROOT / "data" / "closet.db"
+    if _p.exists():
+        _st.apply(_db.Store(_p).settings())
+except Exception:
+    pass
 
 ok = lambda m: print("  ✓ " + m)
 bad = lambda m: print("  ✗ " + m)
@@ -26,7 +33,7 @@ tip = lambda m: print("    → " + m)
 print("\n即梦（火山方舟）连接检查\n")
 key = P.env("ARK_API_KEY")
 if not key:
-    bad(".env 里没有 ARK_API_KEY")
+    bad("没有 ARK_API_KEY（设置面板或 .env 里都没填）")
     tip("复制 .env.example 为 .env，填上 ARK_API_KEY=你的key")
     sys.exit(1)
 ok(f"读到 ARK_API_KEY（{key[:4]}…{key[-4:]}，共 {len(key)} 位）")
@@ -41,10 +48,10 @@ H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 # 1. 网络
 t = time.time()
 try:
-    r = httpx.get(P.ARK.rsplit("/api/", 1)[0], timeout=P.timeout(20))
-    ok(f"能连上 {P.ARK.split('/')[2]}（{time.time() - t:.1f} 秒）")
+    r = httpx.get(P.ARK().rsplit("/api/", 1)[0], timeout=P.timeout(20))
+    ok(f"能连上 {P.ARK().split('/')[2]}（{time.time() - t:.1f} 秒）")
 except Exception as e:
-    bad(f"连不上 {P.ARK.split('/')[2]}：{type(e).__name__}: {e}")
+    bad(f"连不上 {P.ARK().split('/')[2]}：{type(e).__name__}: {e}")
     tip("检查网络；开着 VPN/代理的话先关掉再试")
     sys.exit(1)
 
@@ -52,7 +59,7 @@ except Exception as e:
 model = P.env("CHECK_MODEL", "doubao-seed-1-6-250615")
 t = time.time()
 try:
-    r = httpx.post(f"{P.ARK}/chat/completions", headers=H, timeout=P.timeout(60),
+    r = httpx.post(f"{P.ARK()}/chat/completions", headers=H, timeout=P.timeout(60),
                    json={"model": model, "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]})
     if r.status_code == 200:
         ok(f"key 有效，自动检查用的模型 {model} 可以用（{time.time() - t:.1f} 秒）")
@@ -76,7 +83,7 @@ if vm and vm != vm.strip():
     bad("SEEDANCE_MODEL 前后有空格，删掉空格")
 t = time.time()
 try:
-    r = httpx.get(f"{P.ARK}/contents/generations/tasks", headers=H, params={"page_num": 1, "page_size": 5},
+    r = httpx.get(f"{P.ARK()}/contents/generations/tasks", headers=H, params={"page_num": 1, "page_size": 5},
                   timeout=P.timeout(30))
     if r.status_code == 200:
         tasks = (r.json() or {}).get("items") or []
@@ -105,7 +112,7 @@ if "--image" in sys.argv:
     print(f"\n  · 用 {model} 生成一张测试图，通常 10–40 秒…")
     t = time.time()
     try:
-        r = httpx.post(f"{P.ARK}/images/generations", headers=H, timeout=P.timeout(300),
+        r = httpx.post(f"{P.ARK()}/images/generations", headers=H, timeout=P.timeout(300),
                        json={"model": model, "prompt": "a white cotton shirt on a wooden hanger, plain background",
                              "size": "2048x2048", "response_format": "url", "watermark": False,
                              "sequential_image_generation": "disabled"})

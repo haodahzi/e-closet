@@ -66,7 +66,8 @@ async def poll(fn, ok, bad, label, every=2.0, limit=300):
 
 
 # ---------------------------------------------------------------- 阿里云百炼
-DS = env("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/api/v1")
+def DS():  # 接口地址每次现读，设置面板里改了马上生效
+    return env("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/api/v1")
 
 
 def ds_key():
@@ -94,7 +95,7 @@ async def ds_upload(client, model, src):
     """试衣接口只收链接：本地图先传到百炼的临时存储（48 小时有效），得到 oss:// 地址。"""
     if not isinstance(src, Path):
         return src
-    r = await client.get(f"{DS}/uploads", params={"action": "getPolicy", "model": model},
+    r = await client.get(f"{DS()}/uploads", params={"action": "getPolicy", "model": model},
                          headers={"Authorization": f"Bearer {ds_key()}"})
     j = ds_check(r, "获取上传凭证")
     p = j.get("data") or j.get("output") or j
@@ -113,11 +114,11 @@ async def ds_task(client, payload, label):
     """提交异步任务并轮询，返回 output。"""
     oss = any(isinstance(v, str) and v.startswith("oss://") for v in payload["input"].values())
     h = ds_headers(**{"X-DashScope-Async": "enable"}, **({"X-DashScope-OssResourceResolve": "enable"} if oss else {}))
-    j = ds_check(await client.post(f"{DS}/services/aigc/image2image/image-synthesis", json=payload, headers=h), label)
+    j = ds_check(await client.post(f"{DS()}/services/aigc/image2image/image-synthesis", json=payload, headers=h), label)
     tid = j["output"]["task_id"]
 
     async def status():
-        return ds_check(await client.get(f"{DS}/tasks/{tid}", headers=ds_headers()), label)["output"]
+        return ds_check(await client.get(f"{DS()}/tasks/{tid}", headers=ds_headers()), label)["output"]
 
     out = await poll(status, lambda o: o.get("task_status") == "SUCCEEDED",
                      lambda o: f"{o.get('code', '')} {o.get('message', '')}".strip() or o.get("task_status")
@@ -147,7 +148,7 @@ async def bailian_refine(client, coarse, person, top=None, bottom=None):
     if bottom:
         inp["bottom_garment_url"] = await ds_upload(client, m, bottom)
     return await ds_task(client, {"model": m, "input": inp,
-                                  "parameters": {"gender": env("GENDER", "woman")}}, "百炼精修")
+                                  "parameters": {"gender": env("GENDER", "man")}}, "百炼精修")
 
 
 async def bailian_edit(client, images, prompts):
@@ -162,7 +163,7 @@ async def bailian_edit(client, images, prompts):
                 "parameters": {"n": 1, "watermark": False, "prompt_extend": False,
                                "negative_prompt": "deformed face, different person, extra limbs, blurry, cartoon"}}
         try:
-            r = await client.post(f"{DS}/services/aigc/multimodal-generation/generation", json=body,
+            r = await client.post(f"{DS()}/services/aigc/multimodal-generation/generation", json=body,
                                   headers=ds_headers())
             j = ds_check(r, "通义图像编辑")
             for part in j["output"]["choices"][0]["message"]["content"]:
@@ -177,7 +178,8 @@ async def bailian_edit(client, images, prompts):
 
 
 # ---------------------------------------------------------------- 可灵
-KLING = env("KLING_BASE_URL", "https://api-beijing.klingai.com")
+def KLING():
+    return env("KLING_BASE_URL", "https://api-beijing.klingai.com")
 
 
 def kling_ready():
@@ -207,7 +209,7 @@ def kling_check(r, label):
 
 
 async def kling_tryon(client, human, cloth):
-    url = f"{KLING}/v1/images/kolors-virtual-try-on"
+    url = f"{KLING()}/v1/images/kolors-virtual-try-on"
     h = lambda: {"Authorization": f"Bearer {kling_token()}", "Content-Type": "application/json"}
     pic = lambda x: b64(x) if isinstance(x, Path) else x  # 本地图传纯 base64，不带 data: 前缀
     d = kling_check(await client.post(url, headers=h(), json={
@@ -228,7 +230,8 @@ async def kling_tryon(client, human, cloth):
 
 
 # ---------------------------------------------------------------- 火山方舟（即梦 Seedream）
-ARK = env("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+def ARK():
+    return env("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
 
 
 def ark_size(first):
@@ -252,7 +255,7 @@ async def seedream_edit(client, images, prompts):
                 "image": [small_uri(x) for x in images], "size": ark_size(images[0]),
                 "sequential_image_generation": "disabled", "response_format": "url", "watermark": False}
         try:
-            r = await client.post(f"{ARK}/images/generations", json=body,
+            r = await client.post(f"{ARK()}/images/generations", json=body,
                                   headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
                                            "Content-Type": "application/json"})
             if r.status_code in (401, 403):
@@ -279,7 +282,7 @@ async def seedream_views(client, images, prompt, n):
             "image": [small_uri(x) for x in images], "size": ark_size(images[0]),
             "sequential_image_generation": "auto", "sequential_image_generation_options": {"max_images": n},
             "response_format": "url", "watermark": False}
-    r = await client.post(f"{ARK}/images/generations", json=body, timeout=600,
+    r = await client.post(f"{ARK()}/images/generations", json=body, timeout=600,
                           headers={"Authorization": f"Bearer {env('ARK_API_KEY')}", "Content-Type": "application/json"})
     if r.status_code in (401, 403):
         raise GenError("火山方舟拒绝了 ARK_API_KEY（无效、没开通 Seedream 模型或余额不足）。", r.status_code)
@@ -377,7 +380,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
                         "duration": t["secs"], **t["extra"]}
                 if not t.get("bare"):
                     body.update({"resolution": env("VIDEO_RESOLUTION", "720p"), "ratio": "adaptive", "watermark": False})
-                r = await client.post(f"{ARK}/contents/generations/tasks", json=body, headers=h)
+                r = await client.post(f"{ARK()}/contents/generations/tasks", json=body, headers=h)
                 j = r.json() if "json" in r.headers.get("content-type", "") else {}
                 if r.status_code < 400 and j.get("id"):
                     print(f"\n  · 转一圈：{model}，{'首尾帧（照片同时作首帧和尾帧）' if both else '只给首帧'}", flush=True)
@@ -414,7 +417,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
 
     async def status():
         on_wait(int(time.time() - t0))
-        q = await client.get(f"{ARK}/contents/generations/tasks/{tid}", headers=h)
+        q = await client.get(f"{ARK()}/contents/generations/tasks/{tid}", headers=h)
         return q.json()
 
     done = await poll(status, lambda s: s.get("status") == "succeeded",
@@ -432,7 +435,7 @@ async def ark_describe(client, image, category):
     kind = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat"}.get(
         category, "accessory")
     try:
-        r = await client.post(f"{ARK}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
+        r = await client.post(f"{ARK()}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
                                                                  "Content-Type": "application/json"},
                               json={"model": env("CHECK_MODEL", "doubao-seed-1-6-250615"), "temperature": 0,
                                     "messages": [{"role": "user", "content": [
@@ -481,7 +484,7 @@ async def ark_judge(client, refs, result, wear_txt):
     content += [{"type": "image_url", "image_url": {"url": small_uri(p, 768)}} for _, p in refs]
     content += [{"type": "image_url", "image_url": {"url": result}}]
     try:
-        r = await client.post(f"{ARK}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
+        r = await client.post(f"{ARK()}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
                                                                  "Content-Type": "application/json"},
                               json={"model": env("CHECK_MODEL", "doubao-seed-1-6-250615"), "temperature": 0,
                                     "messages": [{"role": "user", "content": content}]})
