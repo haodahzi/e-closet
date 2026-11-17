@@ -94,9 +94,14 @@ def main():
         except Exception:
             pass
         webview.create_window(TITLE, url, width=1440, height=900, min_size=(1100, 720))
-        webview.start()
+        # Windows 上必须用 WebView2（Edge）：它不在的话 pywebview 会悄悄退到老旧的 IE 内核，页面会坏。宁可明确报错
+        webview.start(gui="edgechromium" if sys.platform == "win32" else None)
     except Exception as e:                              # 没有 pywebview / 系统缺 WebView 组件：用默认浏览器
-        print(f"  （没能打开原生窗口：{type(e).__name__}: {e}）改用浏览器打开 {url}", flush=True)
+        reason = f"{type(e).__name__}: {e}"
+        if sys.platform == "win32" and "ImportError" not in reason[:11]:
+            reason += "（Windows 需要 Microsoft Edge WebView2 运行时：https://developer.microsoft.com/microsoft-edge/webview2 ，装好后重开）"
+        appmod.NATIVE_ERROR = reason
+        print(f"  （没能打开原生窗口：{reason}）改用浏览器打开 {url}", flush=True)
         if os.environ.get("NO_BROWSER_FALLBACK") != "1":
             webbrowser.open(url)
         try:

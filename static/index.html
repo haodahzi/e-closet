@@ -261,6 +261,7 @@ html.btncur input:not([type=checkbox]):not([type=radio]),html.btncur textarea{cu
 .grow{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .gt{margin-left:8px;font:500 11px var(--sans);padding:1px 7px;border-radius:999px;background:var(--tile-hi);color:var(--soft)}
 
+.nativewarn{margin:8px 32px 0;padding:8px 14px;border-radius:var(--r-sm);background:#F6E7DF;color:#7A3A2A;font-size:12.5px;word-break:break-all}
 /* ---------- 服装库 ---------- */
 .lib{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--bg) radial-gradient(circle,rgba(0,0,0,.045) 1.6px,transparent 2px) 0 0/34px 34px}
 .libin{max-width:1240px;margin:0 auto;padding:22px 32px 48px}
@@ -385,6 +386,8 @@ function pickModel(pid){
   <button class="link" id="open-settings">⚙ 设置</button>
 </header>
 
+<div class="nativewarn" id="nativewarn" hidden></div>
+
 <div class="room">
   <section class="closet" aria-label="衣橱">
     <div class="rack">
@@ -491,7 +494,7 @@ async function refresh(){
   if(viewing)viewing=S.looks.find(l=>l.id===viewing.id)||null;
   keep();render();
 }
-function render(){$('demo').hidden=!S.config.demo;renderWho();renderGf();renderLibrary();renderCustLib();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
+function render(){$('demo').hidden=!S.config.demo;{const w=$('nativewarn');w.hidden=!S.config.native_error;w.textContent=S.config.native_error?'没能打开独立窗口，已改用浏览器：'+S.config.native_error:''}renderWho();renderGf();renderLibrary();renderCustLib();renderRail();renderShelf();renderFit();renderLooks();renderStage();renderDrawer();fitPage()}
 /* 整个界面放在一屏里：电脑上窗口不够高时，把衣杆整体缩小到刚好放下，不用往下滚 */
 function fitPage(){
   const r=document.querySelector('.rack'), de=document.documentElement;

@@ -1073,6 +1073,8 @@ async def run_job(job, req: TryOn, plan):
 
 
 # ---------------------------------------------------------------- 默认模特
+NATIVE_ERROR = ""   # 桌面版没能打开原生窗口时，desktop.py 把原因写在这里，页面顶部会提示
+
 BUILTIN_MODELS = [("model_man", "男模特 · 标准", "man", "man.jpg"), ("model_woman", "女模特 · 标准", "woman", "woman.jpg")]
 
 
@@ -1177,7 +1179,7 @@ def state():
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "profiles": db.get("profiles", {}),
-            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "genders": list(GENDERS), "default_gender": P.env("GENDER", "man"), "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
+            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "genders": list(GENDERS), "default_gender": P.env("GENDER", "man"), "native_error": NATIVE_ERROR, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
