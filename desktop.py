@@ -57,6 +57,18 @@ def main():
         log = open(os.path.join(home_dir(), "app.log"), "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = log
 
+    if os.environ.get("DCLOSET_SELFTEST_WEBVIEW") == "1":   # 打包后自检：原生窗口组件能不能初始化
+        import traceback
+        try:
+            import webview
+            from webview import guilib
+            gui = guilib.initialize(None)
+            print("WEBVIEW_OK", getattr(webview, "__version__", "?"), getattr(gui, "__name__", gui), flush=True)
+        except BaseException:
+            traceback.print_exc()
+            print("WEBVIEW_FAIL", flush=True)
+        return
+
     import uvicorn
     import dcloset_app as appmod
 

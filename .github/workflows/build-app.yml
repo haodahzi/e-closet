@@ -66,6 +66,20 @@ jobs:
           cat smoke.log; cat smoke_home/app.log 2>/dev/null || true
           [ $ok = 1 ] || { echo "packaged app did not start"; exit 1; }
           kill $PID
+      - name: Self-test - native window components (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:DCLOSET_SELFTEST_WEBVIEW = "1"; $env:DCLOSET_HOME = "$PWD\wv_home"
+          Start-Process -FilePath "dist\D-Closet\D-Closet.exe" -Wait
+          if (Test-Path wv_home\app.log) { Get-Content wv_home\app.log }
+      - name: Self-test - native window components (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          DCLOSET_SELFTEST_WEBVIEW=1 DCLOSET_HOME="$PWD/wv_home" dist/D-Closet.app/Contents/MacOS/D-Closet 2>&1 || true
+          cat wv_home/app.log 2>/dev/null || true
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: cd dist && ditto -c -k --sequesterRsrc --keepParent D-Closet.app D-Closet-mac.zip
