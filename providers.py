@@ -432,7 +432,7 @@ async def seedance_turn(client, image, prompt, on_wait=lambda s: None):
 
 async def ark_describe(client, image, category):
     """看图写一句英文描述（颜色、材质、关键细节），生成时和图一起交给即梦，鞋子等小件更不容易画错。"""
-    kind = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat"}.get(
+    kind = {"shirt": "shirt", "polo": "polo shirt", "jacket": "suit jacket", "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat"}.get(
         category, "accessory")
     try:
         r = await client.post(f"{ARK()}/chat/completions", headers={"Authorization": f"Bearer {env('ARK_API_KEY')}",
@@ -451,10 +451,10 @@ async def ark_describe(client, image, category):
         return None
 
 
-CHECKS = ("same_person", "shirt_match", "pants_match", "outfit_complete", "natural", "wear_correct",
+CHECKS = ("same_person", "shirt_match", "jacket_match", "pants_match", "outfit_complete", "natural", "wear_correct",
           "shoes_match", "belt_match", "hat_match", "accessories_match", "white_bg", "light_visible")
 # 哪项没过就只修哪一处；natural / outfit_complete 属于整体问题，只能整身重做
-FIXABLE = {"shirt_match": "shirt", "pants_match": "pants", "shoes_match": "shoes", "belt_match": "belt",
+FIXABLE = {"shirt_match": "shirt", "jacket_match": "jacket", "pants_match": "pants", "shoes_match": "shoes", "belt_match": "belt",
            "hat_match": "hat", "accessories_match": "accessory", "same_person": "face", "wear_correct": "wear",
            "white_bg": "background", "light_visible": "light"}
 
@@ -469,6 +469,7 @@ async def ark_judge(client, refs, result, wear_txt):
         '{"same_person": bool (same face, hair, skin tone and body shape as image 1), '
         '"shirt_match": bool (shirt colour, stripe/check scale and spacing, collar and buttons match the shirt reference; '
         'true if there is no shirt reference), '
+        '"jacket_match": bool (the suit jacket colour, fabric pattern, lapels, buttons and pockets match the suit jacket reference; true if there is no jacket reference), '
         '"white_bg": bool (the background is a plain white or very light seamless backdrop with nothing else in it; a slightly grey white is fine), '
         '"pants_match": bool (trousers colour, fabric, cut and length match the trousers reference; true if none), '
         '"outfit_complete": bool (every referenced item is worn, in the right place and at a natural scale), '

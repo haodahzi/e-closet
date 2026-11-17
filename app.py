@@ -78,7 +78,11 @@ def reload_config():
 
 reload_config()
 
-CATEGORIES = {"person", "shirt", "pants", "belt", "shoes", "hat", "accessory"}
+CATEGORIES = {"person", "shirt", "polo", "jacket", "pants", "belt", "shoes", "hat", "accessory"}
+TOPS = ("shirt", "polo", "jacket")           # 挂在衣杆上的上装（衬衫和POLO衫占同一个“上衣”位，西装外套单独一个位）
+HANGED = (*TOPS, "pants")                    # 挂在衣杆上的（其余放鞋架）
+GENDERS = ("man", "woman", "unisex")         # 单品性别：男款 / 女款 / 通用
+GENDER_EN = {"man": "men's ", "woman": "women's ", "unisex": ""}
 MAX_ACCESSORIES = 3
 
 # ---------------------------------------------------------------- 出错记录
@@ -143,7 +147,7 @@ def normalize_image(raw: bytes) -> Image.Image:
     return im
 
 
-GARMENTS = {"shirt", "pants", "belt", "shoes", "hat", "accessory"}
+GARMENTS = {"shirt", "polo", "jacket", "pants", "belt", "shoes", "hat", "accessory"}
 
 
 def cutout(im: Image.Image, holes=False):
@@ -207,9 +211,9 @@ def ai_cutout(im: Image.Image, category):
     rgb = im.convert("RGB")
     mask = remove(rgb, session=_session(P.env("REMBG_MODEL", "u2net")), only_mask=True)
     person = False
-    if category in ("shirt", "pants") and 0.03 < skin_share(rgb, mask) < 0.35:  # 太高说明衣服本身是米色、肤色
+    if category in HANGED and 0.03 < skin_share(rgb, mask) < 0.35:  # 太高说明衣服本身是米色、肤色
         # 抠出来的东西里有不少皮肤（脸、脖子、手）：是模特穿着拍的，再用衣服分割模型只留下衣服
-        cloth = _session("u2net_cloth_seg").predict(rgb, cc="upper" if category == "shirt" else "lower")[0]
+        cloth = _session("u2net_cloth_seg").predict(rgb, cc="lower" if category == "pants" else "upper")[0]
         cloth = cloth.resize(rgb.size).filter(ImageFilter.MaxFilter(5))
         both = ImageChops.multiply(mask, cloth)
         area = lambda m: m.point(lambda v: 255 if v > 128 else 0).histogram()[255]
@@ -237,6 +241,8 @@ def hang_fit(path, category, own=False):
         import numpy as np
     except Exception:
         return None
+    if category in ("polo", "jacket"):  # 上装都按衬衫的办法量
+        category = "shirt"
     im = Image.open(path)
     a = np.asarray(im.split()[-1]) > 128
     h, w = a.shape
@@ -265,7 +271,7 @@ def hang_fit(path, category, own=False):
         return {"own": True, "hx": round(hx, 3), "ty": round(y0 / h, 4), "ar": round(h / w, 3), "fill": fill, "v": 9}
     # 自带衣架（你自己挂着拍的）：最上面是一截很细、居中的挂钩。
     # 这种不裁、不画我们的衣架，直接把它自己的挂钩挂到衣杆上。
-    if category in ("shirt", "pants"):
+    if category in ("shirt", "pants"):  # （上装已在函数开头统一成 shirt）
         y0 = int(np.argmax(width > 0))
         thin = 0
         while y0 + thin < h and 0 < width[y0 + thin] < 0.08 * width.max():
@@ -357,9 +363,9 @@ def ensure_cut(it):
     return True
 
 
-def tidy_prompts(category, name):
+def tidy_prompts(category, name, gender=None):
     """整理成单品图：只要衣服本身，像挂在一个看不见的衣架上；不要模特、人台、假人、衣架。"""
-    hanger = category in ("shirt", "pants")
+    hanger = category in HANGED
     nobody = ("Absolutely no person, no mannequin, no dress form, no ghost-mannequin neck, no body parts, "
               + ("" if hanger else "no hanger, no clip, ") + "no props, no text, no shadow box.")
     keep = ("Keep its exact colour, fabric texture, pattern and stripe/check scale and spacing, collar, buttons, "
@@ -368,6 +374,13 @@ def tidy_prompts(category, name):
         "shirt": "front view, hanging on a slim natural wooden hanger with a thin silver hook at the top centre: "
                  "the shoulders rest on the hanger, collar standing around the empty neck opening, sleeves hanging "
                  "straight down beside the body, natural soft folds, hem straight; the whole hanger and hook visible",
+        "polo": "front view, hanging on a slim natural wooden hanger with a thin silver hook at the top centre: "
+                "the shoulders rest on the hanger, the polo collar lying flat with the placket buttons visible, short "
+                "sleeves hanging straight down, natural soft folds, hem straight; the whole hanger and hook visible",
+        "jacket": "front view, hanging on a wide-shouldered natural wooden suit hanger with a thin silver hook at the "
+                  "top centre: the jacket buttoned or closed as in the photo, lapels, buttons and pocket flaps "
+                  "clearly visible, sleeves hanging straight down, structured shoulders, natural soft folds; the whole "
+                  "hanger and hook visible",
         "pants": "front view, hanging from a wooden trouser hanger with two small clips holding the waistband and a "
                  "thin silver hook at the top centre, legs falling naturally side by side",
         "shoes": "the pair side by side, three-quarter front view",
@@ -375,8 +388,9 @@ def tidy_prompts(category, name):
         "hat": "three-quarter front view, sitting on nothing",
         "accessory": "front view, laid out neatly",
     }[category]
-    what = {"shirt": "shirt", "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat",
-            "accessory": name or "accessory"}[category]
+    what = GENDER_EN.get(gender, "") + {"shirt": "shirt", "polo": "polo shirt", "jacket": "suit jacket",
+                                        "pants": "trousers", "shoes": "pair of shoes", "belt": "belt", "hat": "hat",
+                                        "accessory": name or "accessory"}[category]
     a = (f"Extract only the {what} from image 1 and show it alone as a clean e-commerce product photo on a pure white "
          f"background, soft even light, centred, {look}. {keep} {nobody}")
     b = (f"Product photo of only the {what} from image 1 on a plain white background, {look}. Every detail, colour "
@@ -385,7 +399,10 @@ def tidy_prompts(category, name):
 
 
 # ---------------------------------------------------------------- 提示词
-PIECE_EN = {"shirt": "shirt", "pants": "trousers", "shoes": "shoes", "belt": "belt", "hat": "hat"}
+ZH_PIECE = {"shirt": "衬衫", "polo": "POLO衫", "jacket": "西装外套", "pants": "裤子", "shoes": "鞋子", "belt": "腰带",
+            "hat": "帽子", "accessory": "配饰"}
+PIECE_EN = {"shirt": "shirt", "polo": "polo shirt", "jacket": "suit jacket", "pants": "trousers", "shoes": "shoes", "belt": "belt",
+            "hat": "hat"}
 WEAR_EN = {
     "tuck": {"in": "The shirt is tucked neatly into the trousers, waistband visible.",
              "out": "The shirt is worn untucked, hem hanging outside over the trousers."},
@@ -393,6 +410,9 @@ WEAR_EN = {
                 "rolled": "Shirt sleeves are rolled up to just below the elbow."},
     "collar": {"closed": "The shirt is buttoned all the way up to the collar.",
                "open": "The top shirt button is undone, collar open, no tie."},
+    "jacket": {"open": "The suit jacket is worn open, unbuttoned, front hanging naturally so the top underneath shows.",
+               "buttoned": "The suit jacket is worn buttoned (top button done for a one-button, middle button for a "
+                           "two-button jacket), lapels lying flat, a clean closed front."},
     # 姿势写死：不写的话模型每次随手换姿势（插兜、叉腰…），几套搭配放在一起不统一，转身视频也更容易乱动
     "pose": {"down": "Pose: standing upright facing the camera, weight on both feet, both arms hanging naturally "
                      "relaxed at the sides, hands open and relaxed next to the thighs, not in pockets.",
@@ -513,8 +533,23 @@ def named(item, fallback):
     return f"{fallback} ({n})" if n else fallback
 
 
-def wear_text(wear):
+def wear_text(wear, polo=False):
+    """衬衫 / POLO衫的穿法。POLO衫是短袖、没有解扣子的领口，措辞单独写。"""
+    if polo:
+        return (WEAR_EN["tuck"][wear["tuck"]].replace("shirt", "polo shirt") + " "
+                + "The polo's short sleeves hang naturally. "
+                + ("The polo placket is buttoned all the way up." if wear["collar"] == "closed"
+                   else "The top placket button is undone, collar lying flat."))
     return " ".join(WEAR_EN[k][wear[k]] for k in ("tuck", "sleeves", "collar"))
+
+
+def jacket_text(wear):
+    return WEAR_EN["jacket"][wear.get("jacket") or "open"]
+
+
+def noun(it, slot):
+    """提示词里怎么称呼这件单品：男款/女款 + 衬衫/POLO衫/西装外套…（单品性别没填就不写）。"""
+    return GENDER_EN.get(it.get("gender"), "") + PIECE_EN.get(it.get("kind") or it.get("category"), PIECE_EN.get(slot, slot))
 
 
 def pose_text(wear):
@@ -523,7 +558,7 @@ def pose_text(wear):
 
 def clothes_prompts(pieces, wear):
     """一次换上全部单品（即梦 / fal 流程）。图 1 是人，图 2.. 依次是各单品；配饰写成 ("accessory", item)。"""
-    label = lambda c, it: named(it, PIECE_EN[c]) if c != "accessory" else (it.get("name") or "").strip() or "accessory"
+    label = lambda c, it: named(it, noun(it, c)) if c != "accessory" else (it.get("name") or "").strip() or "accessory"
     where = {"accessory": " (worn where it naturally belongs, at realistic scale)",
              "belt": " (threaded through the trouser belt loops at the waist, buckle centred and clearly visible)",
              "hat": " (worn on the head naturally, hair adjusted around it)"}
@@ -531,7 +566,10 @@ def clothes_prompts(pieces, wear):
         (" (its photo shows it on a hanger; ignore the hanger)" if (it.get("fit") or {}).get("own") else "")
     refs = "; ".join(f"the {label(c, it)} from image {i + 2}{desc(it)}{where.get(c, '')}"
                      for i, (c, it) in enumerate(pieces))
-    wear_txt = wear_text(wear) if any(c == "shirt" for c, _ in pieces) else ""
+    polo = any(c == "shirt" and it.get("category") == "polo" for c, it in pieces)
+    wear_txt = wear_text(wear, polo) if any(c == "shirt" for c, _ in pieces) else ""
+    if any(c == "jacket" for c, _ in pieces):
+        wear_txt += " " + jacket_text(wear) + (" The jacket is worn over the top layer." if any(c == "shirt" for c, _ in pieces) else "")
     fidelity = ("Reproduce every item faithfully from its own reference image: same colour, fabric texture, pattern "
                 "and stripe scale, collar shape, buttons, stitching and logos; the shoes must be exactly the referenced "
                 "shoes (same type, colours, laces and sole), not a generic pair. Do not invent details. Fabric should drape, crease and cast "
@@ -549,19 +587,31 @@ def clothes_prompts(pieces, wear):
     return [a, b]
 
 
-def finish_prompts(shoes, wear, has_shirt):
+def finish_prompts(shoes, wear, has_shirt, polo=False):
     """试穿模型换好衬衫裤子之后：换鞋 + 把穿法（塞/放、袖子、领口）调到位。"""
     todo = []
     if shoes:
         todo.append(f"Replace only the person's shoes with the {named(shoes, 'shoes')} from image 2, matching "
                     "its colour, material and shape at realistic scale.")
     if has_shirt:
-        todo.append(f"Adjust only how the shirt is worn: {wear_text(wear)} Keep the shirt's colour, fabric, "
+        todo.append(f"Adjust only how the {"polo shirt" if polo else "shirt"} is worn: {wear_text(wear, polo)} Keep its colour, fabric, "
                     "stripe or check scale, collar and buttons exactly as in image 1.")
     todo.append(pose_text(wear))
     rest = ("The trousers stay exactly as in image 1. " if has_shirt else "") + KEEP
     a = f"Image 1 is a photo of a person. {' '.join(todo)} {rest} Output one photorealistic photo."
     b = f"Fashion styling photograph of the same person from image 1, unchanged. {' '.join(todo)} {rest}"
+    return [a, b]
+
+
+def jacket_prompts(jacket, wear, has_top):
+    """试穿模型换好上衣裤子之后：把西装外套穿到最外面（百炼 / 可灵流程用，即梦和 fal 一次出图不需要）。"""
+    what = named(jacket, noun(jacket, "jacket"))
+    over = "over the top the person is already wearing" if has_top else "as the outer layer"
+    a = (f"Image 1 is a photo of a person. Dress the person in the {what} from image 2, worn {over}. "
+         f"{jacket_text(wear)} Match its colour, fabric, pattern, lapels, buttons and pockets exactly. "
+         f"The trousers, shoes and everything else stay exactly as in image 1. {KEEP} Output one photorealistic photo.")
+    b = (f"Styling photograph of the same person from image 1, now also wearing the {what} from image 2 {over}. "
+         f"{jacket_text(wear)} Everything else is unchanged. {KEEP}")
     return [a, b]
 
 
@@ -596,7 +646,8 @@ def accessory_prompts(accs):
 # ---------------------------------------------------------------- 试穿流程
 class TryOn(BaseModel):
     person_id: str
-    shirt_id: Optional[str] = None
+    shirt_id: Optional[str] = None      # “上衣”位：衬衫或 POLO 衫
+    jacket_id: Optional[str] = None     # 西装外套
     pants_id: Optional[str] = None
     shoes_id: Optional[str] = None
     belt_id: Optional[str] = None
@@ -605,6 +656,7 @@ class TryOn(BaseModel):
     tuck: str = "in"
     sleeves: str = "down"
     collar: str = "open"
+    jacket: str = "open"  # open 敞开 / buttoned 扣上
     pose: str = "down"  # down 双手自然下垂 / open 双手微张 / pocket 单手插兜
     refine: bool = False
     force: bool = False
@@ -616,16 +668,21 @@ def build_plan(req: TryOn, items, pipeline=None, editor=None):
 
     def get(i, cat):
         it = items.get(i)
-        if not it or it["category"] != cat:
+        if not it or it["category"] not in ((cat,) if isinstance(cat, str) else cat):
             raise HTTPException(400, "选中的单品已经不在衣橱里了，刷新页面后重选。")
         return it
 
     person = get(req.person_id, "person")
     wear = {"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar, "pose": req.pose}
+    if req.jacket_id:   # 没选外套时不放进缓存键，老搭配的缓存不受影响
+        wear["jacket"] = req.jacket
     for k, v in wear.items():
         if v not in WEAR_EN[k]:
             raise HTTPException(400, f"穿法参数不对：{k}={v}")
-    shirt = get(req.shirt_id, "shirt") if req.shirt_id else None
+    shirt = get(req.shirt_id, ("shirt", "polo")) if req.shirt_id else None
+    jacket = get(req.jacket_id, "jacket") if req.jacket_id else None
+    polo = bool(shirt and shirt["category"] == "polo")
+    zh = lambda it: ZH_PIECE[it["category"]]
     pants = get(req.pants_id, "pants") if req.pants_id else None
     shoes = get(req.shoes_id, "shoes") if req.shoes_id else None
     belt = get(req.belt_id, "belt") if req.belt_id else None
@@ -633,44 +690,47 @@ def build_plan(req: TryOn, items, pipeline=None, editor=None):
     accs = [get(i, "accessory") for i in sorted(set(req.accessory_ids))]
     if len(accs) > MAX_ACCESSORIES:
         raise HTTPException(400, f"配饰一次最多 {MAX_ACCESSORIES} 件，太多会明显掉质量。")
-    if not (shirt or pants or shoes or belt or hat or accs):
-        raise HTTPException(400, "还没选任何单品。至少选一件衬衫、裤子、鞋子或配饰。")
+    if not (shirt or jacket or pants or shoes or belt or hat or accs):
+        raise HTTPException(400, "还没选任何单品。至少选一件衬衫、POLO衫、西装外套、裤子、鞋子或配饰。")
 
     steps = []
     if pipeline != "seedream":
         accs = accs + [it for it in (belt, hat) if it]
     if pipeline == "seedream":  # 一个模型一次出图：人 + 衬衫 + 裤子 + 鞋 + 配饰
-        pieces = [(c, it) for c, it in (("shirt", shirt), ("pants", pants), ("belt", belt), ("shoes", shoes),
+        pieces = [(c, it) for c, it in (("shirt", shirt), ("jacket", jacket), ("pants", pants), ("belt", belt), ("shoes", shoes),
                                         ("hat", hat)) if it] + [("accessory", it) for it in accs]
         steps.append({"kind": "edit", "provider": "seedream", "label": "换上这一身",
                       "refs": [it["file"] for _, it in pieces], "prompts": clothes_prompts(pieces, wear)})
         accs = []
     elif pipeline == "fal":
-        pieces = [(c, it) for c, it in (("shirt", shirt), ("pants", pants), ("shoes", shoes)) if it]
+        pieces = [(c, it) for c, it in (("shirt", shirt), ("jacket", jacket), ("pants", pants), ("shoes", shoes)) if it]
         if pieces:
             steps.append({"kind": "edit", "provider": "fal", "label": "换上" + "、".join(
-                {"shirt": "衬衫", "pants": "裤子", "shoes": "鞋子"}[c] for c, _ in pieces),
+                ZH_PIECE[it["category"]] for _, it in pieces),
                 "refs": [it["file"] for _, it in pieces], "prompts": clothes_prompts(pieces, wear)})
         if req.refine and shirt:  # 注意：专用试穿模型可能把塞进去的下摆重新放出来
             steps.append({"kind": "tryon1", "provider": "fal", "label": "加强衬衫细节", "refs": [shirt["file"]]})
     else:
         if pipeline == "bailian" and (shirt or pants):
             steps.append({"kind": "tryon2", "provider": "bailian",
-                          "label": "换上" + "和".join(x for x, it in (("衬衫", shirt), ("裤子", pants)) if it),
+                          "label": "换上" + "和".join(zh(it) for it in (shirt, pants) if it),
                           "top": shirt and shirt["file"], "bottom": pants and pants["file"]})
             if req.refine:
                 steps.append({"kind": "refine", "provider": "bailian", "label": "精修衣服细节",
                               "top": shirt and shirt["file"], "bottom": pants and pants["file"]})
         if pipeline == "kling":
             # 叠穿顺序决定塞法：先衬衫后裤子 = 裤腰压住下摆；先裤子后衬衫 = 下摆盖住裤腰
-            order = [("衬衫", shirt), ("裤子", pants)] if req.tuck == "in" else [("裤子", pants), ("衬衫", shirt)]
-            for label, it in order:
+            order = [shirt, pants] if req.tuck == "in" else [pants, shirt]
+            for it in order:
                 if it:
-                    steps.append({"kind": "tryon1", "provider": "kling", "label": f"换上{label}", "refs": [it["file"]]})
+                    steps.append({"kind": "tryon1", "provider": "kling", "label": f"换上{zh(it)}", "refs": [it["file"]]})
         if shirt or shoes:
             steps.append({"kind": "edit", "provider": editor,
                           "label": "换鞋、调整穿法" if shoes and shirt else ("换鞋" if shoes else "调整穿法"),
-                          "refs": [shoes["file"]] if shoes else [], "prompts": finish_prompts(shoes, wear, bool(shirt))})
+                          "refs": [shoes["file"]] if shoes else [], "prompts": finish_prompts(shoes, wear, bool(shirt), polo)})
+        if jacket:  # 试穿模型只管上衣和裤子，西装外套最后用编辑模型穿到最外面
+            steps.append({"kind": "edit", "provider": editor, "label": "穿上西装外套", "refs": [jacket["file"]],
+                          "prompts": jacket_prompts(jacket, wear, bool(shirt))})
     if accs:
         editor_acc = "fal" if pipeline == "fal" else editor
         n = P.EDIT_MAX_IMAGES[editor_acc] - 1
@@ -755,7 +815,7 @@ def snapshot(look_id, req: TryOn):
     import shutil
     items = db_load()["items"]
     out = {"pieces": [], "person_file": None}
-    picks = [("person", req.person_id), ("shirt", req.shirt_id), ("pants", req.pants_id), ("belt", req.belt_id),
+    picks = [("person", req.person_id), ("shirt", req.shirt_id), ("jacket", req.jacket_id), ("pants", req.pants_id), ("belt", req.belt_id),
              ("shoes", req.shoes_id), ("hat", req.hat_id)] + \
             [("accessory", i) for i in req.accessory_ids]
     for n, (cat, iid) in enumerate(picks):
@@ -771,7 +831,8 @@ def snapshot(look_id, req: TryOn):
             out["person_file"] = name
             out["person_pbox"] = it.get("pbox")
         else:
-            out["pieces"].append({"category": cat, "name": it.get("name", ""), "file": name})
+            out["pieces"].append({"category": cat, "kind": it["category"], "gender": it.get("gender", ""),
+                                  "name": it.get("name", ""), "file": name})
     return out
 
 
@@ -793,7 +854,7 @@ async def ensure_descs(ids):
         db_save(db)
 
 
-PART_ZH = {"shirt": "衬衫", "pants": "裤子", "belt": "腰带", "shoes": "鞋子", "hat": "帽子", "accessory": "配饰",
+PART_ZH = {"shirt": "衬衫", "jacket": "西装外套", "pants": "裤子", "belt": "腰带", "shoes": "鞋子", "hat": "帽子", "accessory": "配饰",
            "face": "长相", "wear": "穿法和姿势", "background": "白底", "light": "白色单品的轮廓"}
 
 
@@ -813,13 +874,13 @@ def fix_inputs(sel, parts, note="", snap=None):
         return None
 
     for part in parts:
-        if part in ("shirt", "pants", "belt", "shoes", "hat"):
+        if part in ("shirt", "jacket", "pants", "belt", "shoes", "hat"):
             got = ref(part, sel.get(f"{part}_id"))
             if got:
                 imgs.append(got[0])
                 d = f" ({got[1]['desc']})" if got[1].get("desc") else ""
                 keep = " Keep how it is worn (tucked/untucked, sleeves, collar) as it is now." if part == "shirt" else ""
-                todo.append(f"the {PIECE_EN[part]} must become exactly the one in image {len(imgs) + 1}{d}, same colour, "
+                todo.append(f"the {noun(got[1], part)} must become exactly the one in image {len(imgs) + 1}{d}, same colour, "
                             f"pattern scale and details.{keep}")
         elif part == "accessory":
             for iid in sel.get("accessory_ids") or []:
@@ -837,8 +898,12 @@ def fix_inputs(sel, parts, note="", snap=None):
                             f"image {len(imgs) + 1}.")
         elif part == "wear":
             if sel.get("shirt_id"):
-                todo.append("fix how the shirt is worn: " + wear_text({k: sel.get(k) or d for k, d in
-                                                                      (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))}))
+                top = items.get(sel["shirt_id"]) or saved.get("shirt") or {}
+                todo.append("fix how the top is worn: " + wear_text({k: sel.get(k) or d for k, d in
+                                                                    (("tuck", "in"), ("sleeves", "down"), ("collar", "open"))},
+                                                                   (top.get("kind") or top.get("category")) == "polo"))
+            if sel.get("jacket_id"):
+                todo.append("fix how the jacket is worn: " + jacket_text(sel))
             if sel.get("pose"):  # 早期的搭配没有记姿势，就不改姿势
                 todo.append("fix the pose. " + pose_text(sel))
         elif part == "light":
@@ -858,7 +923,7 @@ def fix_inputs(sel, parts, note="", snap=None):
     return imgs, [a, b], bool(todo)
 
 
-PALETTE_WEIGHT = {"shirt": 1.0, "pants": 0.8, "shoes": 0.3, "hat": 0.2, "belt": 0.15, "accessory": 0.15}
+PALETTE_WEIGHT = {"jacket": 1.1, "shirt": 1.0, "pants": 0.8, "shoes": 0.3, "hat": 0.2, "belt": 0.15, "accessory": 0.15}
 
 
 def look_palette(lk):
@@ -868,7 +933,7 @@ def look_palette(lk):
             if (RESULTS / p["file"]).exists()]
     if not srcs:
         items, q = db_load()["items"], lk.get("sel") or {}
-        for cat in ("shirt", "pants", "belt", "shoes", "hat"):
+        for cat in ("jacket", "shirt", "pants", "belt", "shoes", "hat"):
             it = items.get(q.get(f"{cat}_id") or "")
             if it:
                 srcs.append((ITEMS / (it.get("cut") or it["file"]), PALETTE_WEIGHT[cat]))
@@ -893,7 +958,7 @@ def check_refs(req: TryOn):
     """自动检查用的对照图：原照 + 这一身的每件单品。"""
     items = db_load()["items"]
     refs = [("person", ITEMS / items[req.person_id]["file"])]
-    for label, i in (("shirt", req.shirt_id), ("trousers", req.pants_id), ("belt", req.belt_id), ("shoes", req.shoes_id),
+    for label, i in (("shirt", req.shirt_id), ("suit jacket", req.jacket_id), ("trousers", req.pants_id), ("belt", req.belt_id), ("shoes", req.shoes_id),
                      ("hat", req.hat_id)):
         if i in items:
             refs.append((label, ITEMS / items[i]["file"]))
@@ -904,12 +969,14 @@ def check_refs(req: TryOn):
 async def run_job(job, req: TryOn, plan):
     try:
         checking = not MOCK and P.ready("seedream") and P.env("AUTO_CHECK", "1") != "0"
-        wear = (wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar}) + " " if req.shirt_id else "") + \
-            pose_text({"pose": req.pose})
+        _it = db_load()["items"]
+        wear = (wear_text({"tuck": req.tuck, "sleeves": req.sleeves, "collar": req.collar},
+                          (_it.get(req.shirt_id) or {}).get("category") == "polo") + " " if req.shirt_id else "") + \
+            (jacket_text({"jacket": req.jacket}) + " " if req.jacket_id else "") + pose_text({"pose": req.pose})
         items = db_load()["items"]
         try:  # 先给还没有文字描述的单品补上描述，再按最新描述写提示词（缓存键不受影响）
             job.update(step="读懂每件单品")
-            await ensure_descs([req.shirt_id, req.pants_id, req.belt_id, req.shoes_id, req.hat_id, *req.accessory_ids])
+            await ensure_descs([req.shirt_id, req.jacket_id, req.pants_id, req.belt_id, req.shoes_id, req.hat_id, *req.accessory_ids])
             plan = {**build_plan(req, db_load()["items"]), "key": plan["key"]}
             items = db_load()["items"]
         except HTTPException:
@@ -955,7 +1022,7 @@ async def run_job(job, req: TryOn, plan):
                         if total(r2) >= total(qa):
                             best, qa = fixed, r2
                         break
-        light = any(is_light(it) for it in (items.get(x or "") for x in [req.shirt_id, req.pants_id, req.shoes_id,
+        light = any(is_light(it) for it in (items.get(x or "") for x in [req.shirt_id, req.jacket_id, req.pants_id, req.shoes_id,
                                                                         req.belt_id, req.hat_id]) if it)
         im = await asyncio.to_thread(whiten_bg, best, light)
         job.update(step="保存结果")
@@ -1049,7 +1116,7 @@ def state():
     return {"items": sorted(db["items"].values(), key=lambda x: -x["created"]),
             "looks": sorted(db["looks"].values(), key=lambda x: -x["created"]),
             "profiles": db.get("profiles", {}),
-            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
+            "config": {"demo": MOCK, "stages": STAGES, "kinds": KINDS, "genders": list(GENDERS), "pipeline": PIPELINE, "pipeline_name": P.NAMES[PIPELINE],
                        "editor_name": P.NAMES[EDITOR], "max_accessories": MAX_ACCESSORIES,
                        "portrait_cost": 0 if MOCK else P.price("edit", EDITOR),
                        "tidy_cost": 0 if MOCK else P.price("edit", EDITOR),
@@ -1059,7 +1126,7 @@ def state():
 
 @app.post("/api/items")
 async def add_item(file: UploadFile = File(...), category: str = Form(...), name: str = Form(""),
-                   tidy: str = Form(""), profile: str = Form("")):
+                   tidy: str = Form(""), profile: str = Form(""), gender: str = Form("")):
     """tidy=1：照片里有模特或背景乱时，先用即梦整理成干净的单品图，再放进衣橱（换装也更准）。
     profile：上传照片时归到哪个形象（不填就是一个新形象）。"""
     if category not in CATEGORIES:
@@ -1071,6 +1138,8 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
     item_id = uuid.uuid4().hex[:12]
     item = {"id": item_id, "category": category, "name": name.strip()[:40], "file": f"{item_id}.jpg",
             "created": time.time()}
+    if category in GARMENTS:   # 单品分男款 / 女款 / 通用；没选的当通用
+        item["gender"] = gender if gender in GENDERS else "unisex"
     if category == "person" and profile.strip():
         item["profile"] = profile.strip()[:40]
     if tidy == "1" and category in GARMENTS and not MOCK:
@@ -1078,11 +1147,11 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
             raise HTTPException(400, f"整理单品图要用{P.NAMES[EDITOR]}，设置里还没填它的 key。")
         im.save(ITEMS / f"{item_id}_orig.jpg", quality=92)
         item["orig"] = f"{item_id}_orig.jpg"
-        item["hanger"] = category in ("shirt", "pants")
+        item["hanger"] = category in HANGED
         try:
             async with httpx.AsyncClient(timeout=P.timeout()) as client:
                 im = normalize_image(_jpeg(await fetch_image(client, await P.EDIT[EDITOR](
-                    client, [ITEMS / item["orig"]], tidy_prompts(category, item["name"])))))
+                    client, [ITEMS / item["orig"]], tidy_prompts(category, item["name"], item.get("gender"))))))
         except P.GenError as e:
             log_error("add_item", e)
             raise HTTPException(502, str(e))
@@ -1101,7 +1170,8 @@ async def add_item(file: UploadFile = File(...), category: str = Form(...), name
 
 
 class Rename(BaseModel):
-    name: str
+    name: Optional[str] = None
+    gender: Optional[str] = None
 
 
 @app.patch("/api/items/{item_id}")
@@ -1110,7 +1180,14 @@ def rename_item(item_id: str, body: Rename):
         db = db_load()
         if item_id not in db["items"]:
             raise HTTPException(404, "这件单品已经被删除。")
-        db["items"][item_id]["name"] = body.name.strip()[:40]
+        it = db["items"][item_id]
+        if body.name is not None:
+            it["name"] = body.name.strip()[:40]
+        if body.gender is not None:
+            if body.gender not in GENDERS or it["category"] not in GARMENTS:
+                raise HTTPException(400, "性别只能是男款、女款或通用。")
+            it["gender"] = body.gender
+            it.pop("desc", None)   # 文字描述里可能带着性别，改了性别让它重写
         db_save(db)
         return db["items"][item_id]
 
@@ -1464,7 +1541,7 @@ async def run_fix(job, look_id, fix: Fix):
             raw = await fetch_image(client, await P.EDIT["seedream"](client, [RESULTS / lk["file"]] + refs, prompts))
         items = db_load()["items"]
         q = lk.get("sel") or {}
-        light = any(is_light(it) for it in (items.get(q.get(f"{c}_id") or "") for c in ("shirt", "pants", "shoes", "belt", "hat")) if it)
+        light = any(is_light(it) for it in (items.get(q.get(f"{c}_id") or "") for c in ("shirt", "jacket", "pants", "shoes", "belt", "hat")) if it)
         im = await asyncio.to_thread(whiten_bg, raw, light)
         name = f"{look_id}_f{int(time.time())}.jpg"
         im.save(RESULTS / name, quality=95)
