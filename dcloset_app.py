@@ -31,10 +31,10 @@ def user_home():
         return Path(os.environ["DCLOSET_HOME"]).expanduser()
     if FROZEN:
         if sys.platform == "win32":
-            return Path(os.environ.get("APPDATA", Path.home())) / "D-Closet"
+            return Path(os.environ.get("APPDATA", Path.home())) / "SENDI"
         if sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support" / "D-Closet"
-        return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "d-closet"
+            return Path.home() / "Library" / "Application Support" / "SENDI"
+        return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "sendi"
     return ROOT
 
 
@@ -1121,6 +1121,11 @@ app = FastAPI(title="衬衫衣橱")
 # 只开放图片目录：closet.db 里有 API Key 和客户资料，不能被浏览器直接下载
 app.mount("/media/items", StaticFiles(directory=ITEMS), name="media-items")
 app.mount("/media/results", StaticFiles(directory=RESULTS), name="media-results")
+
+
+@app.get("/icon.png")
+def app_icon():
+    return FileResponse(BUNDLE / "assets" / "icon.png")
 
 
 @app.get("/")

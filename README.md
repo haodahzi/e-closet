@@ -1,4 +1,4 @@
-# 衬衫衣橱 D-Closet · 定制销售版
+# SENDI · 西装衬衫定制销售工具
 
 本地运行的电子衣橱：存你的衬衫、裤子、鞋子、配饰，选一身，用你自己的照片生成试穿效果。
 换装走云端模型：默认只用**即梦（火山方舟 Seedream）**一个模型一次出图；也可以接阿里云百炼、可灵、fal.ai 做对比。模型接入都在 `providers.py`。
@@ -49,7 +49,7 @@
 
 ## 作为桌面应用打开
 
-**打包好的版本**（Windows 的 `D-Closet.exe`、macOS 的 `D-Closet.app`）：双击就是一个独立窗口，不用开终端、不用开浏览器，数据放在系统的应用数据目录（Windows `%APPDATA%\D-Closet`、macOS `~/Library/Application Support/D-Closet`）。打包有两种办法：
+**打包好的版本**（Windows 的 `SENDI.exe`、macOS 的 `SENDI.app`）：双击就是一个独立窗口，不用开终端、不用开浏览器，数据放在系统的应用数据目录（Windows `%APPDATA%\SENDI`、macOS `~/Library/Application Support/SENDI`）。打包有两种办法：
 
 - GitHub 上手动运行 “Build desktop app” 工作流（Actions 页面 → Run workflow），在 Windows 和 macOS 上各打一份，下载 artifact 即可；
 - 或者在对应系统上自己跑：`pip install -r requirements-desktop.txt` 然后 `python build_app.py`，输出在 `dist/`。

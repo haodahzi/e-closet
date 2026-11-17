@@ -1,16 +1,16 @@
-"""把 D-Closet 打包成桌面应用（在哪个系统上跑，就打出哪个系统的版本）。
+"""把 SENDI 打包成桌面应用（在哪个系统上跑，就打出哪个系统的版本）。
 
     pip install -r requirements.txt pywebview pyinstaller
     python build_app.py
 
-输出：dist/D-Closet/（Windows，里面的 D-Closet.exe）或 dist/D-Closet.app（macOS）。
+输出：dist/SENDI/（Windows，里面的 SENDI.exe）或 dist/SENDI.app（macOS）。
 """
 import importlib.util, os, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 sep = os.pathsep
-args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "D-Closet",
+args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "SENDI",
         "--add-data", f"static{sep}static", "--add-data", f"assets{sep}assets",
         "--icon", str(ROOT / "assets" / ("icon.ico" if sys.platform == "win32" else "icon.png")),
         "--paths", str(ROOT),

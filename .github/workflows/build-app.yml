@@ -27,12 +27,12 @@ jobs:
         shell: python
         run: |
           import glob
-          for f in glob.glob("build/D-Closet/warn-D-Closet.txt"):
+          for f in glob.glob("build/SENDI/warn-SENDI.txt"):
               print("== warnings mentioning our modules ==")
               for l in open(f, encoding="utf-8", errors="replace"):
                   if any(k in l for k in ("named app", "named dcloset_app", "named db ", "named providers", "named settings", "named palette")):
                       print(l.rstrip())
-          for f in glob.glob("build/D-Closet/PYZ-00.toc"):
+          for f in glob.glob("build/SENDI/PYZ-00.toc"):
               t = open(f, encoding="utf-8", errors="replace").read()
               print("== PYZ has dcloset_app:", "'dcloset_app'" in t, "| fastapi:", "'fastapi'" in t, "| providers:", "'providers'" in t)
       - name: Smoke test - start the packaged app (Windows)
@@ -41,7 +41,7 @@ jobs:
         run: |
           $env:DCLOSET_NO_WINDOW = "1"; $env:NO_BROWSER_FALLBACK = "1"; $env:PORT = "8150"
           $env:DCLOSET_HOME = "$PWD\smoke_home"
-          $p = Start-Process -FilePath "dist\D-Closet\D-Closet.exe" -PassThru
+          $p = Start-Process -FilePath "dist\SENDI\SENDI.exe" -PassThru
           $ok = $false
           for ($i = 0; $i -lt 90; $i++) {
             Start-Sleep 1
@@ -55,7 +55,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           export DCLOSET_NO_WINDOW=1 NO_BROWSER_FALLBACK=1 PORT=8150 DCLOSET_HOME="$PWD/smoke_home"
-          dist/D-Closet.app/Contents/MacOS/D-Closet > smoke.log 2>&1 &
+          dist/SENDI.app/Contents/MacOS/SENDI > smoke.log 2>&1 &
           PID=$!
           ok=0
           for i in $(seq 1 90); do
@@ -72,20 +72,45 @@ jobs:
         shell: pwsh
         run: |
           $env:DCLOSET_SELFTEST_WEBVIEW = "1"; $env:DCLOSET_HOME = "$PWD\wv_home"
-          Start-Process -FilePath "dist\D-Closet\D-Closet.exe" -Wait
+          Start-Process -FilePath "dist\SENDI\SENDI.exe" -Wait
           if (Test-Path wv_home\app.log) { Get-Content wv_home\app.log }
       - name: Self-test - native window components (macOS)
         if: runner.os == 'macOS'
         continue-on-error: true
         run: |
-          DCLOSET_SELFTEST_WEBVIEW=1 DCLOSET_HOME="$PWD/wv_home" dist/D-Closet.app/Contents/MacOS/D-Closet 2>&1 || true
+          DCLOSET_SELFTEST_WEBVIEW=1 DCLOSET_HOME="$PWD/wv_home" dist/SENDI.app/Contents/MacOS/SENDI 2>&1 || true
           cat wv_home/app.log 2>/dev/null || true
+      - name: Self-test - standalone app window via Edge/Chrome (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:DCLOSET_NO_WINDOW = "1"; $env:NO_BROWSER_FALLBACK = "1"; $env:PORT = "8151"; $env:DCLOSET_HOME = "$PWD\aw_home"
+          $env:DCLOSET_APP_FLAGS = "--headless=new --screenshot=$PWD\appwin.png --virtual-time-budget=8000"
+          $p = Start-Process -FilePath "dist\SENDI\SENDI.exe" -PassThru
+          for ($i = 0; $i -lt 60 -and -not (Test-Path appwin.png); $i++) { Start-Sleep 1 }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (Test-Path aw_home\app.log) { Get-Content aw_home\app.log }
+          if (-not (Test-Path appwin.png)) { throw "app window screenshot missing" }
+          Write-Host "app window OK: $((Get-Item appwin.png).Length) bytes"
+      - name: Self-test - standalone app window via Edge/Chrome (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          export DCLOSET_NO_WINDOW=1 NO_BROWSER_FALLBACK=1 PORT=8151 DCLOSET_HOME="$PWD/aw_home"
+          export DCLOSET_APP_FLAGS="--headless=new --screenshot=$PWD/appwin.png --virtual-time-budget=8000"
+          dist/SENDI.app/Contents/MacOS/SENDI > aw.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do [ -f appwin.png ] && break; sleep 1; done
+          kill $PID 2>/dev/null || true
+          cat aw.log aw_home/app.log 2>/dev/null || true
+          [ -f appwin.png ] && echo "app window OK: $(stat -f%z appwin.png) bytes" || { echo "app window screenshot missing"; exit 1; }
       - name: Zip (macOS)
         if: runner.os == 'macOS'
-        run: cd dist && ditto -c -k --sequesterRsrc --keepParent D-Closet.app D-Closet-mac.zip
+        run: cd dist && ditto -c -k --sequesterRsrc --keepParent SENDI.app SENDI-mac.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: D-Closet-${{ runner.os }}
+          name: SENDI-${{ runner.os }}
           path: |
-            dist/D-Closet
-            dist/D-Closet-mac.zip
+            dist/SENDI
+            dist/SENDI-mac.zip
