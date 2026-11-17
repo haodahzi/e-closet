@@ -613,7 +613,7 @@ def finish_prompts(shoes, wear, has_shirt, polo=False):
         todo.append(f"Replace only the person's shoes with the {named(shoes, 'shoes')} from image 2, matching "
                     "its colour, material and shape at realistic scale.")
     if has_shirt:
-        todo.append(f"Adjust only how the {"polo shirt" if polo else "shirt"} is worn: {wear_text(wear, polo)} Keep its colour, fabric, "
+        todo.append(f"Adjust only how the {'polo shirt' if polo else 'shirt'} is worn: {wear_text(wear, polo)} Keep its colour, fabric, "
                     "stripe or check scale, collar and buttons exactly as in image 1.")
     todo.append(pose_text(wear))
     rest = ("The trousers stay exactly as in image 1. " if has_shirt else "") + KEEP

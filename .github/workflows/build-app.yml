@@ -19,6 +19,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-desktop.txt
+      - name: Syntax check (CI Python 3.11)
+        run: python -m compileall -q desktop.py dcloset_app.py providers.py db.py settings.py palette.py build_app.py
       - run: python build_app.py
       - name: Diagnostics - what PyInstaller bundled
         if: always()
